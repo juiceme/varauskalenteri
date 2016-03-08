@@ -9,13 +9,9 @@
 <body>
 <form> status: <input type="text" id="myStatusField" value="" disabled></form>
 <br>
-<table id= "myCustomerTable"> </table>
+<div id= "myCalendarView"> </div>
 <br>
-<table id = "myInvoiceTable"> </table>
-<br>
-<div id = "myEmailText"> </div>
-<br>
-<div id = "mySendButton"> </div>
+<div id = "myConfirmButton"> </div>
 
 <script language="javascript" type="text/javascript">
 
@@ -31,5 +27,31 @@ mySocket.onopen = function (event) {
 mySocket.onmessage = function (event) {
     var receivable = JSON.parse(event.data);
     console.log(JSON.stringify(receivable));
+    if(receivable.type == "calendarData") {
+	var calendarData = receivable.content;
+	document.body.replaceChild(createCalendarView(calendarData),
+				   document.getElementById("myCalendarView"));
+	document.body.replaceChild(createConfirmButton(),
+				   document.getElementById("myConfirmButton"));
+    }
+}
+
+function createCalendarView(calendarData) {
+    var calendar = document.createElement('table');
+    return calendar;
+}
+
+
+function createConfirmButton() {
+    var button = document.createElement("button");
+    button.onclick = function() { sendChanges(); }
+    var text = document.createTextNode("Confirm");
+    button.appendChild(text);
+    return button;
+}
+
+
+function sendChanges() {
+    console.log("SendChanges event");
 }
 

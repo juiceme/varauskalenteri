@@ -52,11 +52,20 @@ wsServer.on('request', function(request) {
 	    servicelog(receivable);
 
             if(receivable.type == "clientStarted") {
+/*
 		servicelog("Sending login challenge to client #" + index);
 		sendable = { type: "loginRequest",
 			     content: "encryptedChallenge" };
 		connection.send(JSON.stringify(sendable));
 		setStatustoClient(connection, "Logging in");
+*/
+
+                servicelog("Sending initial data to client #" + index);
+                setStatustoClient(connection, "Forms are up to date");
+                sendable = {type: "calendarData",
+                            content: { "clientSendable" : "cs" } };
+                connection.send(JSON.stringify(sendable));
+
 	    }
 	}
     });
