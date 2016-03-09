@@ -63,7 +63,7 @@ wsServer.on('request', function(request) {
                 servicelog("Sending initial data to client #" + index);
                 setStatustoClient(connection, "Forms are up to date");
                 sendable = {type: "calendarData",
-                            content: { "clientSendable" : "cs" } };
+                            content: getFileData().reservations };
                 connection.send(JSON.stringify(sendable));
 
 	    }
@@ -75,6 +75,16 @@ wsServer.on('request', function(request) {
         globalConnectionList.splice(index, 1);
     });
 });
+
+function getFileData() {
+    try {
+        var reservationData = JSON.parse(fs.readFileSync("./configuration/reservations.json"));
+    } catch (err) {
+        console.log(err.message);
+        process.exit(1);
+    }
+    return { reservations : reservationData };
+}
 
 servicelog("Waiting for client connection to port 8080...");
 serveClientPage();
