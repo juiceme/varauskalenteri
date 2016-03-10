@@ -27,6 +27,9 @@ mySocket.onopen = function (event) {
 mySocket.onmessage = function (event) {
     var receivable = JSON.parse(event.data);
     console.log(JSON.stringify(receivable));
+    if(receivable.type == "statusData") {
+        document.getElementById("myStatusField").value = receivable.content;
+    }
     if(receivable.type == "calendarData") {
 	var calendarData = receivable.content;
 	document.body.replaceChild(createLoginView(), document.getElementById("myDiv1"));
@@ -38,7 +41,27 @@ mySocket.onmessage = function (event) {
 }
 
 function createLoginView() {
-    var fieldset = document.createElement('fieldset');
+    var table = document.createElement('table');
+    var tHeader = document.createElement('thead');
+    var tBody = document.createElement('tbody');
+    var hRow = document.createElement('tr');
+    var hCell = document.createElement('td');
+    var bRow1 = document.createElement('tr');
+    var bCell1a = document.createElement('td');
+    var bCell1b = document.createElement('td');
+    var bRow2 = document.createElement('tr');
+    var bCell2a = document.createElement('td');
+    var bCell2b = document.createElement('td');
+    var bRow3 = document.createElement('tr');
+    var bCell3a = document.createElement('td');
+    var bCell3b = document.createElement('td');
+    var bRow4 = document.createElement('tr');
+    var bCell4a = document.createElement('td');
+    var bCell4b = document.createElement('td');
+    var bRow5 = document.createElement('tr');
+    var bCell5a = document.createElement('td');
+    var bCell5b = document.createElement('td');
+
     var usernameField = document.createElement("input");
     var passwordField = document.createElement("input");
     var loginButton = document.createElement("button");
@@ -49,26 +72,145 @@ function createLoginView() {
     passwordField.name="password";
     passwordField.type="password";
 
+    hCell.colSpan = "2";
+    hCell.appendChild(document.createTextNode("Please login or create a new account;"));
+    hRow.appendChild(hCell);
+    setElementStyle(hCell);
+    tHeader.appendChild(hRow);
+    table.appendChild(tHeader);
+
+    bCell1a.style.border = "solid #ffffff";
+    bCell1b.style.border = "solid #ffffff";
+    setElementStyle(bCell2a);
+    setElementStyle(bCell2b);
+    setElementStyle(bCell3a);
+    setElementStyle(bCell3b);
+    bCell4a.style.border = "solid #ffffff";
+    bCell4b.style.border = "solid #ffffff";
+    setElementStyle(bCell5a);
+    setElementStyle(bCell5b);
+
+    bCell1a.appendChild(document.createTextNode(" "));
+    bCell2a.appendChild(document.createTextNode("username: "));
+    bCell2b.appendChild(usernameField);
+    bCell3a.appendChild(document.createTextNode("password: "));
+    bCell3b.appendChild(passwordField);
+    bCell4a.appendChild(document.createTextNode(" "));
+
     loginButton.appendChild(document.createTextNode("Login"));
     loginButton.onclick = function() { sendLogin(usernameField.value, passwordField.value); }
-    createAccountButton.appendChild(document.createTextNode("Create Account"));
+    createAccountButton.appendChild(document.createTextNode("Create Account / Reset Password"));
     createAccountButton.onclick = function() { createAccountQuery(); }
 
-    fieldset.appendChild(document.createTextNode("Please login or create a new account;"));
-    fieldset.appendChild(document.createElement("br"));
-    fieldset.appendChild(document.createElement("br"));
-    fieldset.appendChild(document.createTextNode("username: "));
-    fieldset.appendChild(usernameField);
-    fieldset.appendChild(document.createElement("br"));
-    fieldset.appendChild(document.createTextNode("password: "));
-    fieldset.appendChild(passwordField);
-    fieldset.appendChild(document.createElement("br"));
-    fieldset.appendChild(document.createElement("br"));
-    fieldset.appendChild(loginButton);
-    fieldset.appendChild(createAccountButton);
-    fieldset.id= "myDiv1";
+    bCell5a.appendChild(loginButton);
+    bCell5b.appendChild(createAccountButton);
 
-    return fieldset;
+    bRow1.appendChild(bCell1a);
+    bRow1.appendChild(bCell1b);
+    bRow2.appendChild(bCell2a);
+    bRow2.appendChild(bCell2b);
+    bRow3.appendChild(bCell3a);
+    bRow3.appendChild(bCell3b);
+    bRow4.appendChild(bCell4a);
+    bRow4.appendChild(bCell4b);
+    bRow5.appendChild(bCell5a);
+    bRow5.appendChild(bCell5b);
+
+    tBody.appendChild(bRow1);
+    tBody.appendChild(bRow2);
+    tBody.appendChild(bRow3);
+    tBody.appendChild(bRow4);
+    tBody.appendChild(bRow5);
+
+    table.appendChild(tBody);
+    table.id= "myDiv1";
+
+    return table;
+}
+
+function createEmailView() {
+    var table = document.createElement('table');
+    var tHeader = document.createElement('thead');
+    var tBody = document.createElement('tbody');
+    var hRow = document.createElement('tr');
+    var hCell = document.createElement('td');
+    var bRow1 = document.createElement('tr');
+    var bCell1a = document.createElement('td');
+    var bRow2 = document.createElement('tr');
+    var bCell2a = document.createElement('td');
+    var bCell2b = document.createElement('td');
+    var bRow3 = document.createElement('tr');
+    var bCell3a = document.createElement('td');
+    var bRow4 = document.createElement('tr');
+    var bCell4a = document.createElement('td');
+    var bRow5 = document.createElement('tr');
+    var bCell5a = document.createElement('td');
+    var bCell5b = document.createElement('td');
+    var bRow6 = document.createElement('tr');
+    var bCell6a = document.createElement('td');
+
+    var emailField = document.createElement("input");
+    var validateField = document.createElement("input");
+    var confirmButton = document.createElement("button");
+    var validateButton = document.createElement("button");
+
+    emailField.name="email";
+    validateField.name="validate";
+
+    hCell.colSpan = "2";
+    hCell.appendChild(document.createTextNode("Creating or restoring account;"));
+    hRow.appendChild(hCell);
+    setElementStyle(hCell);
+    tHeader.appendChild(hRow);
+    table.appendChild(tHeader);
+
+    bCell1a.style.border = "solid #ffffff";
+    bRow1.style.border = "solid #ffffff";
+    setElementStyle(bCell2a);
+    setElementStyle(bCell2b);
+    setElementStyle(bCell3a);
+    bRow3.style.border = "solid #ffffff";
+    bCell4a.style.border = "solid #ffffff";
+    bRow4.style.border = "solid #ffffff";
+    setElementStyle(bCell5a);
+    setElementStyle(bCell5b);
+    setElementStyle(bCell6a);
+    bRow6.style.border = "solid #ffffff";
+
+    bCell2a.appendChild(document.createTextNode("email: "));
+    bCell2b.appendChild(emailField);
+
+    confirmButton.appendChild(document.createTextNode("Send Email!"));
+    confirmButton.onclick = function() { sendConfirmationEmail(emailField.value); }
+    bCell3a.appendChild(confirmButton);
+
+    bCell5a.appendChild(document.createTextNode("validation code: "));
+    bCell5b.appendChild(validateField);
+    validateButton.appendChild(document.createTextNode("Validate Account!"));
+    validateButton.onclick = function() { sendValidationCode(validateField.value); }
+    bCell6a.appendChild(validateButton);
+
+    bRow1.appendChild(bCell1a);
+    bRow2.appendChild(bCell2a);
+    bRow2.appendChild(bCell2b);
+    bRow3.appendChild(bCell3a);
+    bRow4.appendChild(bCell4a);
+    bRow5.appendChild(bCell5a);
+    bRow5.appendChild(bCell5b);
+    bRow6.appendChild(bCell6a);
+
+    tBody.appendChild(bRow1);
+    tBody.appendChild(bRow2);
+    tBody.appendChild(bRow3);
+    tBody.appendChild(bRow4);
+    tBody.appendChild(bRow5);
+    tBody.appendChild(bRow6);
+
+    table.appendChild(tBody);
+    table.id= "myDiv1";
+
+    return table;
+
 }
 
 function createNewAccountView() {
@@ -98,6 +240,18 @@ function createNewAccountView() {
     var bRow7 = document.createElement('tr');
     var bCell7a = document.createElement('td');
     var bCell7b = document.createElement('td');
+    var bRow8 = document.createElement('tr');
+    var bCell8a = document.createElement('td');
+    var bCell8b = document.createElement('td');
+    var bRow9 = document.createElement('tr');
+    var bCell9a = document.createElement('td');
+    var bCell9b = document.createElement('td');
+    var bRow10 = document.createElement('tr');
+    var bCell10a = document.createElement('td');
+    var bCell10b = document.createElement('td');
+    var bRow11 = document.createElement('tr');
+    var bCell11a = document.createElement('td');
+    var bCell11b = document.createElement('td');
 
     var usernameField = document.createElement("input");
     var realnameField = document.createElement("input");
@@ -116,46 +270,56 @@ function createNewAccountView() {
     hCell.colSpan = "2";
     hCell.appendChild(document.createTextNode("Creating a new account;"));
     hRow.appendChild(hCell);
-    hRow.style.border = "solid #ffffff";
+    setElementStyle(hCell);
     tHeader.appendChild(hRow);
     table.appendChild(tHeader);
 
     bCell1a.style.border = "solid #ffffff";
     bCell1b.style.border = "solid #ffffff";
-    bCell2a.style.border = "solid #ffffff";
-    bCell2b.style.border = "solid #ffffff";
-    bCell3a.style.border = "solid #ffffff";
-    bCell3b.style.border = "solid #ffffff";
-    bCell4a.style.border = "solid #ffffff";
-    bCell4b.style.border = "solid #ffffff";
-    bCell5a.style.border = "solid #ffffff";
-    bCell5b.style.border = "solid #ffffff";
+    setElementStyle(bCell2a);
+    setElementStyle(bCell2b);
+    setElementStyle(bCell3a);
+    setElementStyle(bCell3b);
+    setElementStyle(bCell4a);
+    setElementStyle(bCell4b);
+    setElementStyle(bCell5a);
+    setElementStyle(bCell5b);
     bCell6a.style.border = "solid #ffffff";
     bCell6b.style.border = "solid #ffffff";
-    bCell7a.style.border = "solid #ffffff";
-    bCell7b.style.border = "solid #ffffff";
+    setElementStyle(bCell7a);
+    setElementStyle(bCell7b);
+    bCell8a.style.border = "solid #ffffff";
+    bCell8b.style.border = "solid #ffffff";
+    setElementStyle(bCell9a);
+    setElementStyle(bCell9b);
+    bCell10a.style.border = "solid #ffffff";
+    bCell10b.style.border = "solid #ffffff";
+    setElementStyle(bCell11a);
+    setElementStyle(bCell11b);
 
-    bCell1a.appendChild(document.createTextNode("username: "));
-    bCell1b.appendChild(usernameField);
-    bCell2a.appendChild(document.createTextNode("realname: "));
-    bCell2b.appendChild(realnameField);
-    bCell3a.appendChild(document.createTextNode("email: "));
-    bCell3b.appendChild(emailField);
-    bCell4a.appendChild(document.createTextNode("phone: "));
-    bCell4b.appendChild(phoneField);
+    bCell1a.appendChild(document.createTextNode(" "));
+    bCell2a.appendChild(document.createTextNode("username: "));
+    bCell2b.appendChild(usernameField);
+    bCell3a.appendChild(document.createTextNode("realname: "));
+    bCell3b.appendChild(realnameField);
+    bCell4a.appendChild(document.createTextNode("email: "));
+    bCell4b.appendChild(emailField);
+    bCell5a.appendChild(document.createTextNode("phone: "));
+    bCell5b.appendChild(phoneField);
+    bCell6a.appendChild(document.createTextNode(" "));
 
     confirmButton.appendChild(document.createTextNode("Create Account!"));
     confirmButton.onclick = function() { sendConfirmAccount( { username: usernameField.value,
 							       realname:realnameField.value,
 							       email: emailField.value,
 							       phone: phoneField.value } ); }
-    bCell5a.appendChild(confirmButton);
-    bCell6a.appendChild(document.createTextNode("validation code: "));
-    bCell6b.appendChild(validateField);
-
+    bCell7a.appendChild(confirmButton);
+    bCell8a.appendChild(document.createTextNode(" "));
+    bCell9a.appendChild(document.createTextNode("validation code: "));
+    bCell9b.appendChild(validateField);
     validateButton.appendChild(document.createTextNode("Validate Account!"));
-    validateButton.onclick = function() { validateAccount( { code: validateField.value } ); }
-    bCell7a.appendChild(validateButton);
+    validateButton.onclick = function() { validateAccount(validateField.value); }
+    bCell10a.appendChild(validateButton);
 
     bRow1.appendChild(bCell1a);
     bRow1.appendChild(bCell1b);
@@ -171,6 +335,14 @@ function createNewAccountView() {
     bRow6.appendChild(bCell6b);
     bRow7.appendChild(bCell7a);
     bRow7.appendChild(bCell7b);
+    bRow8.appendChild(bCell8a);
+    bRow8.appendChild(bCell8b);
+    bRow9.appendChild(bCell9a);
+    bRow9.appendChild(bCell9b);
+    bRow10.appendChild(bCell10a);
+    bRow10.appendChild(bCell10b);
+    bRow11.appendChild(bCell11a);
+    bRow11.appendChild(bCell11b);
 
     tBody.appendChild(bRow1);
     tBody.appendChild(bRow2);
@@ -179,11 +351,20 @@ function createNewAccountView() {
     tBody.appendChild(bRow5);
     tBody.appendChild(bRow6);
     tBody.appendChild(bRow7);
+    tBody.appendChild(bRow8);
+    tBody.appendChild(bRow9);
+    tBody.appendChild(bRow10);
+    tBody.appendChild(bRow11);
 
     table.appendChild(tBody);
     table.id= "myDiv1";
 
     return table;
+}
+
+function setElementStyle(element) {
+    element.style.border = "solid #ffffff";
+    element.style.padding = "0";
 }
 
 function sendLogin(username, password) {
@@ -194,8 +375,8 @@ function sendLogin(username, password) {
 }
 
 function createAccountQuery() {
-    document.body.replaceChild(createNewAccountView(), document.getElementById("myDiv1"));
-    document.getElementById("myStatusField").value = "Creating account";
+    document.body.replaceChild(createEmailView(), document.getElementById("myDiv1"));
+    document.getElementById("myStatusField").value = "Creating/Reseting account";
 }
 
 function checkEmailValidity(address) {
@@ -227,6 +408,19 @@ function sendConfirmAccount(account) {
     div.id = "myDiv1";
     document.body.replaceChild(div, document.getElementById("myDiv1"));
     sendToServer("createAccount", account);
+}
+
+function sendConfirmationEmail(email) {
+    if(!checkEmailValidity(email)) {
+	document.getElementById("myStatusField").value = "Illegal email address";
+	document.body.replaceChild(createEmailView(), document.getElementById("myDiv1"));
+	return;
+    }
+    sendToServer("confirmEmail", email);
+}
+
+function sendValidationCode(code) {
+    sendToServer("validateAccount", code);
 }
 
 function createCalendarView(calendarData) {

@@ -82,6 +82,18 @@ wsServer.on('request', function(request) {
 		    setStatustoClient(connection, "Account created!");
 		}
 	    }
+
+	    if(receivable.type === "confirmEmail") {
+		servicelog("Request for email verification: [" + receivable.content + "]");
+		sendEmailVerification(receivable.content);
+		setStatustoClient(connection, "Email sent!");
+	    }
+
+	    if(receivable.type === "validateAccount") {
+		servicelog("Validation code: [" + receivable.content + "]");
+		setStatustoClient(connection, "Validation received!");
+	    }
+
 	}
     });
 
@@ -95,8 +107,16 @@ function createAccount(account) {
     try {
 	var userData = JSON.parse(fs.readFileSync("./configuration/users.json"));
     } catch(err) {
-	console.log(err.message);
-	process.exit(1);
+	if(err.code === "ENOENT") {
+	    // If file is not found, no problem. Just create a new one.
+	    servicelog("Empty user database, creating new");
+	    var userData = { users : [] };
+	    fs.writeFileSync("./configuration/users.json", JSON.stringify(userData));
+	} else {
+	    // If some other problem, then exit.
+	    servicelog("Error processing used database: " + err.message);
+	    process.exit(1);
+	}
     }
 
     if(userData.users.filter(function(u) {
@@ -113,6 +133,34 @@ function createAccount(account) {
 	}
 	return true;
     }
+}
+
+function sendEmailVerification(email) {
+    try {
+	var userData = JSON.parse(fs.readFileSync("./configuration/pending.json"));
+    } catch(err) {
+	if(err.code === "ENOENT") {
+	    // If file is not found, no problem. Just create a new one.
+	    servicelog("Empty pending requests database, creating new");
+	    var userData = { pending : [] };
+	    fs.writeFileSync("./configuration/pending.json", JSON.stringify(userData));
+	} else {
+	    // If some other problem, then exit.
+	    servicelog("Error processing pending requests database: " + err.message);
+	    process.exit(1);
+	}
+    }
+    var request = { email: email, token: getRandomToken() };
+    userData.pending.push(request);
+    try {
+	fs.writeFileSync("./configuration/pending.json", JSON.stringify(userData));
+    } catch(err) {
+	servicelog("Pending requests database write failed: " + err.message);
+    }
+}
+
+function getRandomToken() {
+    return "random_token_goes_here";
 }
 
 function getFileData() {
