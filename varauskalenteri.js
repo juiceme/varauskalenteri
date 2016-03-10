@@ -51,7 +51,7 @@ wsServer.on('request', function(request) {
             var receivable = JSON.parse(message.utf8Data);
 	    servicelog(receivable);
 
-            if(receivable.type == "clientStarted") {
+            if(receivable.type === "clientStarted") {
 /*
 		servicelog("Sending login challenge to client #" + index);
 		sendable = { type: "loginRequest",
@@ -67,6 +67,21 @@ wsServer.on('request', function(request) {
                 connection.send(JSON.stringify(sendable));
 
 	    }
+
+	    if(receivable.type === "userLogin") {
+		servicelog("User " + receivable.content.username + " logging in with password " +
+			   receivable.content.password);
+	    }
+
+	    if(receivable.type === "createAccount") {
+		servicelog("Request for new user: [" + receivable.content.username + "]");
+		if(!createAccount(receivable.content)) {
+		    servicelog("Account [" + receivable.content.username + "] already exists!");
+		    setStatustoClient(connection, "Account already exists!");
+		} else {
+		    setStatustoClient(connection, "Account created!");
+		}
+	    }
 	}
     });
 
@@ -75,6 +90,30 @@ wsServer.on('request', function(request) {
         globalConnectionList.splice(index, 1);
     });
 });
+
+function createAccount(account) {
+    try {
+	var userData = JSON.parse(fs.readFileSync("./configuration/users.json"));
+    } catch(err) {
+	console.log(err.message);
+	process.exit(1);
+    }
+
+    if(userData.users.filter(function(u) {
+	return u.username === account.username;
+    }).length !== 0) {
+	return false;
+    } else {
+	account.status = "pending";
+	userData.users.push(account);
+	try {
+	    fs.writeFileSync("./configuration/users.json", JSON.stringify(userData));
+	} catch(err) {
+	    servicelog("User database write failed: " + err.message);
+	}
+	return true;
+    }
+}
 
 function getFileData() {
     try {
