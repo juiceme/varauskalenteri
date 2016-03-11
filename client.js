@@ -17,6 +17,7 @@
 
 var site = window.location.hostname;
 var mySocket = new WebSocket("ws://" + site + ":8081/");
+var sessionPassword = "";
 
 mySocket.onopen = function (event) {
     var sendable = {type:"clientStarted"};
@@ -30,6 +31,20 @@ mySocket.onmessage = function (event) {
     if(receivable.type == "statusData") {
         document.getElementById("myStatusField").value = receivable.content;
     }
+
+    if(receivable.type == "loginView") {
+	document.body.replaceChild(createLoginView(), document.getElementById("myDiv1"));
+    }
+
+    if(receivable.type == "loginChallenge") {
+	var challenge = Aes.Ctr.decrypt(receivable.content, sessionPassword, 128);
+	var plainResponse = challenge.slice(0, (challenge.length - 1)) + "2";
+	var cipheredResponce = Aes.Ctr.encrypt(plainResponse, sessionPassword, 128);
+	sendToServer("loginResponse", cipheredResponce);
+    }
+
+ 
+
     if(receivable.type == "calendarData") {
 	var calendarData = receivable.content;
 	document.body.replaceChild(createLoginView(), document.getElementById("myDiv1"));
@@ -371,7 +386,8 @@ function sendLogin(username, password) {
     div = document.createElement('div');
     div.id = "myDiv1";
     document.body.replaceChild(div, document.getElementById("myDiv1"));
-    sendToServer("userLogin", { username: username, password: password });
+    sessionPassword = Sha1.hash(password);
+    sendToServer("userLogin", { username: Sha1.hash(username) });
 }
 
 function createAccountQuery() {

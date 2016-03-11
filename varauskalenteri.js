@@ -3,8 +3,10 @@ var http = require("http");
 var fs = require("fs");
 var Aes = require('./crypto/aes.js');
 Aes.Ctr = require('./crypto/aes-ctr.js');
+var sha1 = require('./crypto/sha1.js');
 
 var globalConnectionList = [];
+var globalSalt = sha1.hash(JSON.stringify(new Date().getTime()));
 
 function servicelog(s) {
     console.log((new Date()) + " --- " + s);
@@ -21,7 +23,8 @@ function serveClientPage() {
 	var clientjs = fs.readFileSync("./client.js", "utf8");
 	var aesjs = fs.readFileSync("./crypto/aes.js", "utf8");
 	var aesctrjs = fs.readFileSync("./crypto/aes-ctr.js", "utf8");
-	var sendable = clientjs + aesjs + aesctrjs + "</script></body></html>";
+	var sha1js = fs.readFileSync("./crypto/sha1.js", "utf8");
+	var sendable = clientjs + aesjs + aesctrjs + sha1js + "</script></body></html>";
 	response.writeHeader(200, {"Content-Type": "text/html"});
 	response.write(sendable);
 	response.end();
@@ -42,7 +45,9 @@ wsServer = new websocket.server({
 wsServer.on('request', function(request) {
     servicelog("Connection from origin " + request.origin);
     var connection = request.accept(null, request.origin);
-    var index = globalConnectionList.push({ connection: connection });
+    var index = globalConnectionList.push({ connection: connection,
+					    user : "",
+					    login : false }) - 1;
     var sendable;
     servicelog("Client #" + index + " accepted");
 
@@ -52,13 +57,38 @@ wsServer.on('request', function(request) {
 	    servicelog(receivable);
 
             if(receivable.type === "clientStarted") {
+		servicelog("Sending initial login view to client #" + index);
+		sendable = { type: "loginView" }
+		connection.send(JSON.stringify(sendable));
+		setStatustoClient(connection, "Login");
+	    }
+
+	    if(receivable.type === "userLogin") {
+		var user = getUserName(receivable.content.username);
+		if(user.length === 0) {
+		    servicelog("Unknown user login attempt");
+		    setStatustoClient(connection, "Login failed!");
+		} else {
+		    globalConnectionList[index].user = user[0];
+		    servicelog("User " + user[0].username + " logging in");
+		    var plainChallenge = getNewChallenge();
+		    var cipheredChallenge = Aes.Ctr.encrypt(plainChallenge, user[0].password, 128);
+		    globalConnectionList[index].challenge = plainChallenge;
+		    sendable = { type: "loginChallenge", content:  cipheredChallenge };
+		    connection.send(JSON.stringify(sendable));
+		}
+	    }
+
+
+	    
+
 /*
 		servicelog("Sending login challenge to client #" + index);
 		sendable = { type: "loginRequest",
 			     content: "encryptedChallenge" };
 		connection.send(JSON.stringify(sendable));
 		setStatustoClient(connection, "Logging in");
-*/
+
 
                 servicelog("Sending initial data to client #" + index);
                 setStatustoClient(connection, "Forms are up to date");
@@ -68,10 +98,7 @@ wsServer.on('request', function(request) {
 
 	    }
 
-	    if(receivable.type === "userLogin") {
-		servicelog("User " + receivable.content.username + " logging in with password " +
-			   receivable.content.password);
-	    }
+*/
 
 	    if(receivable.type === "createAccount") {
 		servicelog("Request for new user: [" + receivable.content.username + "]");
@@ -91,7 +118,11 @@ wsServer.on('request', function(request) {
 
 	    if(receivable.type === "validateAccount") {
 		servicelog("Validation code: [" + receivable.content + "]");
-		setStatustoClient(connection, "Validation received!");
+		if(validateAccountCode(receivable.content)) {
+		    setStatustoClient(connection, "Validation code correct!");
+		} else {
+		    setStatustoClient(connection, "Validation code failed!");
+		}
 	    }
 
 	}
@@ -102,6 +133,25 @@ wsServer.on('request', function(request) {
         globalConnectionList.splice(index, 1);
     });
 });
+
+function getUserName(hash) {
+    try {
+	var userData = JSON.parse(fs.readFileSync("./configuration/users.json"));
+    } catch(err) {
+	if(err.code === "ENOENT") {
+	    // If file is not found, no problem. Just return empty.
+	    servicelog("Empty user database, bailing out");
+	    return "";
+	} else {
+	    // If some other problem, then exit.
+	    servicelog("Error processing used database: " + err.message);
+	    process.exit(1);
+	}
+    }
+    return userData.users.filter(function(u) {
+	return u.hash == hash;
+    });
+}
 
 function createAccount(account) {
     try {
@@ -124,6 +174,7 @@ function createAccount(account) {
     }).length !== 0) {
 	return false;
     } else {
+	account.hash = sha1.hash(account.username);
 	account.status = "pending";
 	userData.users.push(account);
 	try {
@@ -150,7 +201,7 @@ function sendEmailVerification(email) {
 	    process.exit(1);
 	}
     }
-    var request = { email: email, token: getRandomToken() };
+    var request = { email: email, token: generateEmailToken(email) };
     userData.pending.push(request);
     try {
 	fs.writeFileSync("./configuration/pending.json", JSON.stringify(userData));
@@ -159,8 +210,13 @@ function sendEmailVerification(email) {
     }
 }
 
-function getRandomToken() {
-    return "random_token_goes_here";
+function generateEmailToken() {
+    return (sha.hash(email).slice(0, 16) +
+	    sha1.hash(globalSalt + JSON.stringify(new Date().getTime())).slice(0, 16));
+}
+
+function getNewChallenge() {
+    return ("challenge_" + sha1.hash(globalSalt + JSON.stringify(new Date().getTime())) + "1");
 }
 
 function getFileData() {
