@@ -17,7 +17,8 @@
 
 var site = window.location.hostname;
 var mySocket = new WebSocket("ws://" + site + ":8081/");
-var sessionPassword = "";
+var sessionPassword;
+console.log("0 :" + JSON.stringify(sessionPassword));
 
 mySocket.onopen = function (event) {
     var sendable = {type:"clientStarted"};
@@ -40,10 +41,13 @@ mySocket.onmessage = function (event) {
 	var challenge = Aes.Ctr.decrypt(receivable.content, sessionPassword, 128);
 	var plainResponse = challenge.slice(0, (challenge.length - 1)) + "2";
 	var cipheredResponce = Aes.Ctr.encrypt(plainResponse, sessionPassword, 128);
+	console.log("1 :" + JSON.stringify(sessionPassword));
 	sendToServer("loginResponse", cipheredResponce);
     }
 
- 
+    if(receivable.type == "createNewAccount") {
+ 	document.body.replaceChild(createNewAccountView(), document.getElementById("myDiv1"));
+    }
 
     if(receivable.type == "calendarData") {
 	var calendarData = receivable.content;
@@ -272,15 +276,18 @@ function createNewAccountView() {
     var realnameField = document.createElement("input");
     var emailField = document.createElement("input");
     var phoneField = document.createElement("input");
-    var validateField = document.createElement("input");
+    var password1Field = document.createElement("input");
+    var password2Field = document.createElement("input");
     var confirmButton = document.createElement("button");
-    var validateButton = document.createElement("button");
 
     usernameField.name="username";
     realnameField.name="realname";
     emailField.name="email";
     phoneField.name="phone";
-    validateField.name="validate";
+    password1Field.name="password1";
+    password1Field.type="password";
+    password2Field.name="password2";
+    password2Field.type="password";
 
     hCell.colSpan = "2";
     hCell.appendChild(document.createTextNode("Creating a new account;"));
@@ -299,8 +306,14 @@ function createNewAccountView() {
     setElementStyle(bCell4b);
     setElementStyle(bCell5a);
     setElementStyle(bCell5b);
-    bCell6a.style.border = "solid #ffffff";
-    bCell6b.style.border = "solid #ffffff";
+    setElementStyle(bCell6a);
+    setElementStyle(bCell6b);
+    setElementStyle(bCell7a);
+    setElementStyle(bCell7b);
+    bCell8a.style.border = "solid #ffffff";
+    bCell8b.style.border = "solid #ffffff";
+
+
     setElementStyle(bCell7a);
     setElementStyle(bCell7b);
     bCell8a.style.border = "solid #ffffff";
@@ -321,20 +334,20 @@ function createNewAccountView() {
     bCell4b.appendChild(emailField);
     bCell5a.appendChild(document.createTextNode("phone: "));
     bCell5b.appendChild(phoneField);
-    bCell6a.appendChild(document.createTextNode(" "));
+    bCell6a.appendChild(document.createTextNode("password: "));
+    bCell6b.appendChild(password1Field);
+    bCell7a.appendChild(document.createTextNode("verify passwd: "));
+    bCell7b.appendChild(password2Field);
+    bCell8a.appendChild(document.createTextNode(" "));
 
     confirmButton.appendChild(document.createTextNode("Create Account!"));
     confirmButton.onclick = function() { sendConfirmAccount( { username: usernameField.value,
 							       realname:realnameField.value,
 							       email: emailField.value,
-							       phone: phoneField.value } ); }
-    bCell7a.appendChild(confirmButton);
-    bCell8a.appendChild(document.createTextNode(" "));
-    bCell9a.appendChild(document.createTextNode("validation code: "));
-    bCell9b.appendChild(validateField);
-    validateButton.appendChild(document.createTextNode("Validate Account!"));
-    validateButton.onclick = function() { validateAccount(validateField.value); }
-    bCell10a.appendChild(validateButton);
+							       phone: phoneField.value,
+							       passwd1: password1Field.value,
+							       passwd2: password2Field.value } ); }
+    bCell9a.appendChild(confirmButton);
 
     bRow1.appendChild(bCell1a);
     bRow1.appendChild(bCell1b);
@@ -354,10 +367,6 @@ function createNewAccountView() {
     bRow8.appendChild(bCell8b);
     bRow9.appendChild(bCell9a);
     bRow9.appendChild(bCell9b);
-    bRow10.appendChild(bCell10a);
-    bRow10.appendChild(bCell10b);
-    bRow11.appendChild(bCell11a);
-    bRow11.appendChild(bCell11b);
 
     tBody.appendChild(bRow1);
     tBody.appendChild(bRow2);
@@ -368,8 +377,6 @@ function createNewAccountView() {
     tBody.appendChild(bRow7);
     tBody.appendChild(bRow8);
     tBody.appendChild(bRow9);
-    tBody.appendChild(bRow10);
-    tBody.appendChild(bRow11);
 
     table.appendChild(tBody);
     table.id= "myDiv1";
@@ -387,6 +394,7 @@ function sendLogin(username, password) {
     div.id = "myDiv1";
     document.body.replaceChild(div, document.getElementById("myDiv1"));
     sessionPassword = Sha1.hash(password);
+    console.log("2 :" + JSON.stringify(sessionPassword));
     sendToServer("userLogin", { username: Sha1.hash(username) });
 }
 
@@ -419,11 +427,21 @@ function sendConfirmAccount(account) {
 	document.body.replaceChild(createNewAccountView(), document.getElementById("myDiv1"));
 	return;
     }
+    if(account.passwd1 !== account.passwd2) {
+	document.getElementById("myStatusField").value = "Passwords do not match";
+	document.body.replaceChild(createNewAccountView(), document.getElementById("myDiv1"));
+	return;
+    }
+    var sendable = { username: account.username,
+		     realname: account.realname,
+		     email: account.email,
+		     phone: account.phone,
+		     password: Sha1.hash(account.passwd1) }; 
     document.getElementById("myStatusField").value = "Account query sent";
     div = document.createElement('div');
     div.id = "myDiv1";
     document.body.replaceChild(div, document.getElementById("myDiv1"));
-    sendToServer("createAccount", account);
+    sendToServerEncrypted("createAccount", sendable);
 }
 
 function sendConfirmationEmail(email) {
@@ -436,7 +454,9 @@ function sendConfirmationEmail(email) {
 }
 
 function sendValidationCode(code) {
-    sendToServer("validateAccount", code);
+    sessionPassword = code.slice(8,24);
+    console.log("3 :" + JSON.stringify(sessionPassword));
+    sendToServer("validateAccount", code.slice(0,8));
 }
 
 function createCalendarView(calendarData) {
@@ -529,4 +549,12 @@ function sendChanges() {
 function sendToServer(type, content) {
     var sendable = { type: type, content: content };
     mySocket.send(JSON.stringify(sendable));
+}
+
+function sendToServerEncrypted(type, content) {
+    var sendable = { type: type,
+		     content: Aes.Ctr.encrypt(JSON.stringify(content), sessionPassword, 128) };
+    mySocket.send(JSON.stringify(sendable));
+    console.log("key: " + JSON.stringify(sessionPassword));
+    console.log("msg: " + JSON.stringify(sendable));
 }
