@@ -21,7 +21,7 @@ var sessionPassword;
 console.log("0 :" + JSON.stringify(sessionPassword));
 
 mySocket.onopen = function (event) {
-    var sendable = {type:"clientStarted"};
+    var sendable = {type:"clientStarted", content:"none"};
     mySocket.send(JSON.stringify(sendable));
     document.getElementById("myStatusField").value = "started";
 };
@@ -46,7 +46,9 @@ mySocket.onmessage = function (event) {
     }
 
     if(receivable.type == "createNewAccount") {
- 	document.body.replaceChild(createNewAccountView(), document.getElementById("myDiv1"));
+	var account = JSON.parse(Aes.Ctr.decrypt(receivable.content, sessionPassword, 128));
+	console.log(JSON.stringify(account));
+ 	document.body.replaceChild(createNewAccountView(account), document.getElementById("myDiv1"));
     }
 
     if(receivable.type == "calendarData") {
@@ -232,7 +234,7 @@ function createEmailView() {
 
 }
 
-function createNewAccountView() {
+function createNewAccountView(account) {
     var table = document.createElement('table');
     var tHeader = document.createElement('thead');
     var tBody = document.createElement('tbody');
@@ -288,6 +290,14 @@ function createNewAccountView() {
     password1Field.type="password";
     password2Field.name="password2";
     password2Field.type="password";
+
+    if(account.username) {
+	usernameField.value = account.username;
+	usernameField.disabled = true;
+    }
+    if(account.realname) { realnameField.value = account.realname;}
+    if(account.email) { emailField.value = account.email; }
+    if(account.phone) { phoneField.value = account.phone; }
 
     hCell.colSpan = "2";
     hCell.appendChild(document.createTextNode("Creating a new account;"));
@@ -456,7 +466,9 @@ function sendConfirmationEmail(email) {
 function sendValidationCode(code) {
     sessionPassword = code.slice(8,24);
     console.log("3 :" + JSON.stringify(sessionPassword));
-    sendToServer("validateAccount", code.slice(0,8));
+    var sendable = { email: code.slice(0,8),
+		     challenge: Aes.Ctr.encrypt("clientValidating", sessionPassword, 128) };
+    sendToServer("validateAccount", sendable);
 }
 
 function createCalendarView(calendarData) {
