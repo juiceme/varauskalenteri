@@ -26,7 +26,59 @@ The repository clones AES library as submodule, You need to install it by "git s
     
 ## Documentation
 
-None whatsoever :)
+### Message sequences
+
+```
+CREATING NEW USER
+=================
+
+client                        server                 action
+------                        ------                 ------
+
+[clientStarted]       --> 
+                      <--     [loginView]
+[confirmEmail]        --> 
+                      <--     [loginView]            Verification code is emailed  to the user provided address
+            (when user receives code)
+[validateAccount]     -->
+                      <--     [createNewAccount]
+[createAccount]       -->
+                      <--     [loginView]
+
+
+RECLAIMING FORGOTTEN PASSWORD
+=============================
+
+client                        server                 action
+------                        ------                 ------
+
+[clientStarted]       --> 
+                      <--     [loginView]
+[confirmEmail]        --> 
+                      <--     [loginView]            Verification code is emailed  to the user provided address
+            (when user receives code)
+[validateAccount]     -->
+                      <--     [createNewAccount]
+[createAccount]       -->
+                      <--     [loginView]
+
+
+LOGGING IN USER
+===============
+
+client                        server                 action
+------                        ------                 ------
+
+[clientStarted]       --> 
+                      <--     [loginView]
+[userLogin]           -->
+                      <--     [loginChallenge]
+[loginResponse]       -->
+                      <--     [calendarData]
+
+
+```
+
 
 ## License
 

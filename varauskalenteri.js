@@ -86,18 +86,24 @@ wsServer.on('request', function(request) {
 		servicelog("Received response");
 		var plainResponse = Aes.Ctr.decrypt(receivable.content,
 						globalConnectionList[index].user.password, 128);
-		plainResponse = plainResponse.split(0, (plainResponse.length - 1));
+
 		servicelog("plainResponse: " + plainResponse);
 		servicelog("challenge:     " + globalConnectionList[index].challenge);
 		servicelog("aeskey:        " + globalConnectionList[index].user.password);
 		servicelog("user:          " + JSON.stringify(globalConnectionList[index].user));
 
-		if(globalConnectionList[index].challenge === (plainResponse + "1")) {
+		if(globalConnectionList[index].challenge === plainResponse) {
 		    servicelog("User login OK");
 		    setStatustoClient(connection, "Login OK");
+                    sendable = {type: "calendarData",
+				content: getFileData().reservations };
+                    connection.send(JSON.stringify(sendable));
+		    
 		} else {
 		    servicelog("User login failed");
 		    setStatustoClient(connection, "Login Failed!");
+		    sendable = { type: "loginView" }
+		    connection.send(JSON.stringify(sendable));
 		}
 		
 	    }
@@ -130,6 +136,8 @@ wsServer.on('request', function(request) {
 		if(!createAccount(account)) {
 		    servicelog("Account [" + account.username + "] already exists!");
 		    setStatustoClient(connection, "Account already exists!");
+		    sendable = { type: "createNewAccount" };
+		    connection.send(JSON.stringify(sendable));
 		} else {
 		    setStatustoClient(connection, "Account created!");
 		    sendable = { type: "loginView" }
@@ -141,6 +149,8 @@ wsServer.on('request', function(request) {
 	    if(receivable.type === "confirmEmail") {
 		servicelog("Request for email verification: [" + receivable.content + "]");
 		sendEmailVerification(receivable.content);
+		sendable = { type: "loginView" }
+		connection.send(JSON.stringify(sendable));
 		setStatustoClient(connection, "Email sent!");
 	    }
 
@@ -154,6 +164,8 @@ wsServer.on('request', function(request) {
 		    connection.send(JSON.stringify(sendable));
 		} else {
 		    setStatustoClient(connection, "Validation code failed!");
+		    sendable = { type: "loginView" }
+		    connection.send(JSON.stringify(sendable));
 		}
 	    }
 	}

@@ -39,9 +39,9 @@ mySocket.onmessage = function (event) {
 
     if(receivable.type == "loginChallenge") {
 	var challenge = Aes.Ctr.decrypt(receivable.content, sessionPassword, 128);
-	var plainResponse = challenge.slice(0, (challenge.length - 1)) + "2";
-	var cipheredResponce = Aes.Ctr.encrypt(plainResponse, sessionPassword, 128);
+	var cipheredResponce = Aes.Ctr.encrypt(challenge, sessionPassword, 128);
 	console.log("1 :" + JSON.stringify(sessionPassword));
+	console.log("loginResponse :" + JSON.stringify(cipheredResponce));
 	sendToServer("loginResponse", cipheredResponce);
     }
 
