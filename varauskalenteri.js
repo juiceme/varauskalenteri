@@ -25,7 +25,7 @@ function sendPlainTextToClient(index, sendable) {
 function sendCipherTextToClient(index, sendable) {
     var cipherSendable = { type: sendable.type,
 			   content: Aes.Ctr.encrypt(JSON.stringify(sendable.content),
-						    globalConnectionList[index].aesKey, 128);
+						    globalConnectionList[index].aesKey, 128) };
     globalConnectionList[index].connection.send(JSON.stringify(cipherSendable));
 }
 
@@ -82,8 +82,10 @@ wsServer.on('request', function(request) {
 	    if(type === "userLogin") { processUserLogin(index, content); }
 	    if(type === "loginResponse") { processLoginResponse(index, content); }
 	    if(type === "createAccount") { processCreateAccount(index, content); }
-	    if((type === "confirmEmail") && stateIs(index, "clientStarted")) { processConfirmEmail(index, content); }
-	    if((type === "validateAccount") && stateIs(index, "clientStarted")) { processValidateAccount(index, content); }
+	    if((type === "confirmEmail") &&
+	       stateIs(index, "clientStarted")) { processConfirmEmail(index, content); }
+	    if((type === "validateAccount") &&
+	       stateIs(index, "clientStarted")) { processValidateAccount(index, content); }
 
 	}
     });
@@ -103,8 +105,8 @@ function setState(index, state) {
 }
 
 function processClientStarted(index) {
-    setState(index, "clientStarted");
     servicelog("Sending initial login view to client #" + index);
+    setState(index, "clientStarted");
     var sendable = { type: "loginView" }
     sendPlainTextToClient(index, sendable);
     setStatustoClient(index, "Login");
@@ -114,6 +116,7 @@ function processUserLogin(index, content) {
     var sendable;
     if(!content.username) {
 	servicelog("Illegal user login message");
+	setState(index, "clientStarted");
 	sendable = { type: "loginView" }
 	sendPlainTextToClient(index, sendable);
 	setStatustoClient(index, "Login");
@@ -122,6 +125,7 @@ function processUserLogin(index, content) {
 	var user = getUserByHashedName(content.username);
 	if(user.length === 0) {
 	    servicelog("Unknown user login attempt");
+	    setState(index, "clientStarted");
 	    sendable = { type: "loginView" }
 	    sendPlainTextToClient(index, sendable);
 	    setStatustoClient(index, "Login");
@@ -143,7 +147,7 @@ function processUserLogin(index, content) {
 function processLoginResponse(index, content) {
     servicelog("Received response");
     var sendable;
-    var plainResponse = Aes.Ctr.decrypt(content, globalConnectionList[index].user.password, 128);
+    var plainResponse = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].user.password, 128));
 
     servicelog("plainResponse: " + plainResponse);
     servicelog("challenge:     " + globalConnectionList[index].challenge);
@@ -159,6 +163,7 @@ function processLoginResponse(index, content) {
     } else {
 	servicelog("User login failed");
 	setStatustoClient(index, "Login Failed!");
+	setState(index, "clientStarted");
 	sendable = { type: "loginView" }
 	sendPlainTextToClient(index, sendable);
     }
@@ -177,8 +182,8 @@ function processCreateAccount(index, content) {
 	    sendPlainTextToClient(index, sendable);
 	    return;
 	} else {
-	    setState(index, "clientStarted");
 	    setStatustoClient(index, "Account created!");
+	    setState(index, "clientStarted");
 	    sendable = { type: "loginView" }
 	    sendPlainTextToClient(index, sendable);
 	    setStatustoClient(index, "Login");
@@ -189,18 +194,22 @@ function processCreateAccount(index, content) {
 	servicelog("Request account change for user: [" + account.username + "]");
 	var user = getUserByUserame(account.username);
 	if(user.length === 0) {
-	    setState(index, "clientStarted");
 	    setStatustoClient(index, "Illegal user operation!");
+	    setState(index, "clientStarted");
 	    sendable = { type: "loginView" }
 	    sendPlainTextToClient(index, sendable);
 	    setStatustoClient(index, "Login");
 	    return;
 	} else {
-	    updateUserAccount(account);
-	    setStatustoClient(index, "Account updated!");
+	    if(updateUserAccount(account)) {
+		setStatustoClient(index, "Account updated!");
+	    } else {
+		setStatustoClient(index, "Account update failed!");
+	    }
+	    setState(index, "clientStarted");
 	    sendable = { type: "loginView" }
 	    sendPlainTextToClient(index, sendable);
-	    setStatustoClient(index, "Login");			
+	    setStatustoClient(index, "Login");	
 	    return;
 	}
     }
@@ -209,6 +218,7 @@ function processCreateAccount(index, content) {
 function processConfirmEmail(index, content) {
     servicelog("Request for email verification: [" + content + "]");
     sendEmailVerification(content);
+    setState(index, "clientStarted");
     sendable = { type: "loginView" }
     sendPlainTextToClient(index, sendable);
     setStatustoClient(index, "Email sent!");
@@ -217,6 +227,7 @@ function processConfirmEmail(index, content) {
 function processValidateAccount(index, content) {
     if(!content.email || !content.challenge) {
 	servicelog("Illegal validate account message");
+	setState(index, "clientStarted");
 	sendable = { type: "loginView" }
 	sendPlainTextToClient(index, sendable);
 	setStatustoClient(index, "Login");
@@ -244,6 +255,7 @@ function processValidateAccount(index, content) {
 	    return;
 	} else {
 	    setStatustoClient(index, "Validation code failed!");
+	    setState(index, "clientStarted");
 	    sendable = { type: "loginView" }
 	    sendPlainTextToClient(index, sendable);
 	    return;
@@ -271,7 +283,29 @@ function readUserData() {
 }
 
 function updateUserAccount(account) {
-    servicelog("Update User Account: " + JSON.stringify(account));
+    var userData = readUserData();
+ 
+    if(userData.users.filter(function(u) {
+	return u.username === account.username;
+    }).length === 0) {
+	return false;
+    } else {
+	var newUserData = { users : [] };
+	newUserData.users = userData.users.filter(function(u) {
+	    return u.username !== account.username;
+	});
+	account.hash = sha1.hash(account.username);
+	account.status = "pending";
+	newUserData.users.push(account);
+	try {
+	    fs.writeFileSync("./configuration/users.json", JSON.stringify(newUserData));
+	} catch(err) {
+	    servicelog("User database write failed: " + err.message);
+	}
+	servicelog("Removed pending request from database");
+	servicelog("Updated User Account: " + JSON.stringify(account));
+	return true;
+    }
 }
 
 function getUserByUserame(username) {
