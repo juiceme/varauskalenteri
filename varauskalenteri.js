@@ -74,7 +74,7 @@ wsServer.on('request', function(request) {
 		return;
 	    }
 
-	    servicelog("Incoming message: " + JSON.stringify(receivable));
+//	    servicelog("Incoming message: " + JSON.stringify(receivable));
 	    var type = receivable.type;
 	    var content = receivable.content;
 
@@ -107,6 +107,9 @@ function setState(index, state) {
 function processClientStarted(index) {
     servicelog("Sending initial login view to client #" + index);
     setState(index, "clientStarted");
+    globalConnectionList[index].aesKey = "";
+    globalConnectionList[index].user = {};
+    globalConnectionList[index].challenge = "";
     var sendable = { type: "loginView" }
     sendPlainTextToClient(index, sendable);
     setStatustoClient(index, "Login");
@@ -116,19 +119,13 @@ function processUserLogin(index, content) {
     var sendable;
     if(!content.username) {
 	servicelog("Illegal user login message");
-	setState(index, "clientStarted");
-	sendable = { type: "loginView" }
-	sendPlainTextToClient(index, sendable);
-	setStatustoClient(index, "Login");
+	processClientStarted(index);
 	return;
     } else {
 	var user = getUserByHashedName(content.username);
 	if(user.length === 0) {
 	    servicelog("Unknown user login attempt");
-	    setState(index, "clientStarted");
-	    sendable = { type: "loginView" }
-	    sendPlainTextToClient(index, sendable);
-	    setStatustoClient(index, "Login");
+	    processClientStarted(index);
 	    return;
 	} else {
 	    globalConnectionList[index].user = user[0];
@@ -136,7 +133,7 @@ function processUserLogin(index, content) {
 	    servicelog("User " + user[0].username + " logging in");
 	    var plainChallenge = getNewChallenge();
 	    servicelog("plainChallenge:   " + plainChallenge);
-	    globalConnectionList[index].challenge = plainChallenge;
+	    globalConnectionList[index].challenge = JSON.stringify(plainChallenge);
 	    sendable = { type: "loginChallenge",
 			 content: plainChallenge };
 	    sendCipherTextToClient(index, sendable);
@@ -145,27 +142,18 @@ function processUserLogin(index, content) {
 }
 
 function processLoginResponse(index, content) {
-    servicelog("Received response");
     var sendable;
-    var plainResponse = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].user.password, 128));
-
-    servicelog("plainResponse: " + plainResponse);
-    servicelog("challenge:     " + globalConnectionList[index].challenge);
-    servicelog("aesKey:        " + globalConnectionList[index].user.password);
-    servicelog("user:          " + JSON.stringify(globalConnectionList[index].user));
-
+    var plainResponse = Aes.Ctr.decrypt(content, globalConnectionList[index].user.password, 128);
     if(globalConnectionList[index].challenge === plainResponse) {
 	servicelog("User login OK");
+	setState(index, "loggedIn");
 	setStatustoClient(index, "Login OK");
         sendable = {type: "calendarData",
 		    content: getFileData().reservations };
 	sendPlainTextToClient(index, sendable);
     } else {
 	servicelog("User login failed");
-	setStatustoClient(index, "Login Failed!");
-	setState(index, "clientStarted");
-	sendable = { type: "loginView" }
-	sendPlainTextToClient(index, sendable);
+	processClientStarted(index);
     }
 }
 
@@ -182,11 +170,8 @@ function processCreateAccount(index, content) {
 	    sendPlainTextToClient(index, sendable);
 	    return;
 	} else {
+	    processClientStarted(index);
 	    setStatustoClient(index, "Account created!");
-	    setState(index, "clientStarted");
-	    sendable = { type: "loginView" }
-	    sendPlainTextToClient(index, sendable);
-	    setStatustoClient(index, "Login");
 	    return;
 	}
     }
@@ -194,22 +179,16 @@ function processCreateAccount(index, content) {
 	servicelog("Request account change for user: [" + account.username + "]");
 	var user = getUserByUserame(account.username);
 	if(user.length === 0) {
+	    processClientStarted(index);
 	    setStatustoClient(index, "Illegal user operation!");
-	    setState(index, "clientStarted");
-	    sendable = { type: "loginView" }
-	    sendPlainTextToClient(index, sendable);
-	    setStatustoClient(index, "Login");
 	    return;
 	} else {
+	    processClientStarted(index);
 	    if(updateUserAccount(account)) {
 		setStatustoClient(index, "Account updated!");
 	    } else {
 		setStatustoClient(index, "Account update failed!");
 	    }
-	    setState(index, "clientStarted");
-	    sendable = { type: "loginView" }
-	    sendPlainTextToClient(index, sendable);
-	    setStatustoClient(index, "Login");	
 	    return;
 	}
     }
@@ -218,19 +197,14 @@ function processCreateAccount(index, content) {
 function processConfirmEmail(index, content) {
     servicelog("Request for email verification: [" + content + "]");
     sendEmailVerification(content);
-    setState(index, "clientStarted");
-    sendable = { type: "loginView" }
-    sendPlainTextToClient(index, sendable);
+    processClientStarted(index);
     setStatustoClient(index, "Email sent!");
 }
 
 function processValidateAccount(index, content) {
     if(!content.email || !content.challenge) {
 	servicelog("Illegal validate account message");
-	setState(index, "clientStarted");
-	sendable = { type: "loginView" }
-	sendPlainTextToClient(index, sendable);
-	setStatustoClient(index, "Login");
+	processClientStarted(index);
 	return;
     } else {
 	servicelog("Validation code: " + JSON.stringify(content));
@@ -241,12 +215,13 @@ function processValidateAccount(index, content) {
 	    setStatustoClient(index, "Validation code correct!");
 	    globalConnectionList[index].aesKey = account.token.key;
 	    var newAccount = {email: account.email};
+	    newAccount.buttonText = "Create Account!";
 	    var user = getUserByEmail(account.email);
-	    servicelog("user: " + JSON.stringify(user));
 	    if(user.length !== 0) {
 		newAccount.username = user[0].username;
 		newAccount.realname = user[0].realname;
 		newAccount.phone = user[0].phone;
+		newAccount.buttonText = "Save Account!"
 		setState(index, "oldUserValidated");
 	    }
 	    sendable = { type: "createNewAccount",
@@ -254,10 +229,8 @@ function processValidateAccount(index, content) {
 	    sendCipherTextToClient(index, sendable);
 	    return;
 	} else {
+	    processClientStarted(index);
 	    setStatustoClient(index, "Validation code failed!");
-	    setState(index, "clientStarted");
-	    sendable = { type: "loginView" }
-	    sendPlainTextToClient(index, sendable);
 	    return;
 	}
     }
@@ -278,7 +251,6 @@ function readUserData() {
 	    process.exit(1);
 	}
     }
-    servicelog(JSON.stringify(userData.users));
     return userData;
 }
 
@@ -302,7 +274,6 @@ function updateUserAccount(account) {
 	} catch(err) {
 	    servicelog("User database write failed: " + err.message);
 	}
-	servicelog("Removed pending request from database");
 	servicelog("Updated User Account: " + JSON.stringify(account));
 	return true;
     }

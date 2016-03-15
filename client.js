@@ -18,7 +18,6 @@
 var site = window.location.hostname;
 var mySocket = new WebSocket("ws://" + site + ":8081/");
 var sessionPassword;
-console.log("0 :" + JSON.stringify(sessionPassword));
 
 mySocket.onopen = function (event) {
     var sendable = {type:"clientStarted", content:"none"};
@@ -28,7 +27,7 @@ mySocket.onopen = function (event) {
 
 mySocket.onmessage = function (event) {
     var receivable = JSON.parse(event.data);
-    console.log(JSON.stringify(receivable));
+//    console.log(JSON.stringify(receivable));
     if(receivable.type == "statusData") {
         document.getElementById("myStatusField").value = receivable.content;
     }
@@ -40,14 +39,11 @@ mySocket.onmessage = function (event) {
     if(receivable.type == "loginChallenge") {
 	var challenge = Aes.Ctr.decrypt(receivable.content, sessionPassword, 128);
 	var cipheredResponce = Aes.Ctr.encrypt(challenge, sessionPassword, 128);
-	console.log("1 :" + JSON.stringify(sessionPassword));
-	console.log("loginResponse :" + JSON.stringify(cipheredResponce));
 	sendToServer("loginResponse", cipheredResponce);
     }
 
     if(receivable.type == "createNewAccount") {
 	var account = JSON.parse(Aes.Ctr.decrypt(receivable.content, sessionPassword, 128));
-	console.log(JSON.stringify(account));
  	document.body.replaceChild(createNewAccountView(account), document.getElementById("myDiv1"));
     }
 
@@ -323,7 +319,6 @@ function createNewAccountView(account) {
     bCell8a.style.border = "solid #ffffff";
     bCell8b.style.border = "solid #ffffff";
 
-
     setElementStyle(bCell7a);
     setElementStyle(bCell7b);
     bCell8a.style.border = "solid #ffffff";
@@ -350,7 +345,7 @@ function createNewAccountView(account) {
     bCell7b.appendChild(password2Field);
     bCell8a.appendChild(document.createTextNode(" "));
 
-    confirmButton.appendChild(document.createTextNode("Create Account!"));
+    confirmButton.appendChild(document.createTextNode(account.buttonText));
     confirmButton.onclick = function() { sendConfirmAccount( { username: usernameField.value,
 							       realname:realnameField.value,
 							       email: emailField.value,
@@ -404,7 +399,6 @@ function sendLogin(username, password) {
     div.id = "myDiv1";
     document.body.replaceChild(div, document.getElementById("myDiv1"));
     sessionPassword = Sha1.hash(password);
-    console.log("2 :" + JSON.stringify(sessionPassword));
     sendToServer("userLogin", { username: Sha1.hash(username) });
 }
 
@@ -465,7 +459,6 @@ function sendConfirmationEmail(email) {
 
 function sendValidationCode(code) {
     sessionPassword = code.slice(8,24);
-    console.log("3 :" + JSON.stringify(sessionPassword));
     var sendable = { email: code.slice(0,8),
 		     challenge: Aes.Ctr.encrypt("clientValidating", sessionPassword, 128) };
     sendToServer("validateAccount", sendable);
@@ -533,8 +526,6 @@ function colorCellState(state) {
 }
 
 function calendarCellClicked(cell) {
-    console.log(cell.state);
-
     if(cell.state === 1) { return; }
     if(cell.state === 0) {
 	cell.state = 100;
@@ -567,6 +558,4 @@ function sendToServerEncrypted(type, content) {
     var sendable = { type: type,
 		     content: Aes.Ctr.encrypt(JSON.stringify(content), sessionPassword, 128) };
     mySocket.send(JSON.stringify(sendable));
-    console.log("key: " + JSON.stringify(sessionPassword));
-    console.log("msg: " + JSON.stringify(sendable));
 }
