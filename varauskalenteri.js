@@ -12,10 +12,21 @@ function servicelog(s) {
     console.log((new Date()) + " --- " + s);
 }
 
-function setStatustoClient(connection, status) {
-    var sendable = { type:"statusData",
+function setStatustoClient(index, status) {
+    var sendable = { type: "statusData",
 		     content: status };
-    connection.send(JSON.stringify(sendable));
+    globalConnectionList[index].connection.send(JSON.stringify(sendable));
+}
+
+function sendPlainTextToClient(index, sendable) {
+    globalConnectionList[index].connection.send(JSON.stringify(sendable));
+}
+
+function sendCipherTextToClient(index, sendable) {
+    var cipherSendable = { type: sendable.type,
+			   content: Aes.Ctr.encrypt(JSON.stringify(sendable.content),
+						    globalConnectionList[index].aesKey, 128);
+    globalConnectionList[index].connection.send(JSON.stringify(cipherSendable));
 }
 
 function serveClientPage() {
@@ -67,156 +78,12 @@ wsServer.on('request', function(request) {
 	    var type = receivable.type;
 	    var content = receivable.content;
 
-            if(type === "clientStarted") {
-		globalConnectionList[index].state = "clientStarted";
-		servicelog("Sending initial login view to client #" + index);
-		sendable = { type: "loginView" }
-		connection.send(JSON.stringify(sendable));
-		setStatustoClient(connection, "Login");
-	    }
-
-	    if(type === "userLogin") {
-		if(!content.username) {
-		    servicelog("Illegal user login message");
-		    sendable = { type: "loginView" }
-		    connection.send(JSON.stringify(sendable));
-		    setStatustoClient(connection, "Login");
-		    return;
-		} else {
-		    var user = getUserByHashedName(content.username);
-		    if(user.length === 0) {
-			servicelog("Unknown user login attempt");
-			sendable = { type: "loginView" }
-			connection.send(JSON.stringify(sendable));
-			setStatustoClient(connection, "Login");
-			return;
-		    } else {
-			globalConnectionList[index].user = user[0];
-			servicelog("User " + user[0].username + " logging in");
-			var plainChallenge = getNewChallenge();
-			servicelog("plainChallenge:   " + plainChallenge);
-			var cipheredChallenge = Aes.Ctr.encrypt(plainChallenge, user[0].password, 128);
-			globalConnectionList[index].challenge = plainChallenge;
-			sendable = { type: "loginChallenge", content: cipheredChallenge };
-			connection.send(JSON.stringify(sendable));
-		    }
-		}
-	    }
-
-	    if(type === "loginResponse") {
-		servicelog("Received response");
-		var plainResponse = Aes.Ctr.decrypt(content, globalConnectionList[index].user.password, 128);
-
-		servicelog("plainResponse: " + plainResponse);
-		servicelog("challenge:     " + globalConnectionList[index].challenge);
-		servicelog("aeskey:        " + globalConnectionList[index].user.password);
-		servicelog("user:          " + JSON.stringify(globalConnectionList[index].user));
-
-		if(globalConnectionList[index].challenge === plainResponse) {
-		    servicelog("User login OK");
-		    setStatustoClient(connection, "Login OK");
-                    sendable = {type: "calendarData",
-				content: getFileData().reservations };
-                    connection.send(JSON.stringify(sendable));
-		    
-		} else {
-		    servicelog("User login failed");
-		    setStatustoClient(connection, "Login Failed!");
-		    sendable = { type: "loginView" }
-		    connection.send(JSON.stringify(sendable));
-		}
-		
-	    }
-
-	    if(type === "createAccount") {
-		servicelog("temp passwd: " + JSON.stringify(globalConnectionList[index].key));
-		account = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].key, 128));
-		if(globalConnectionList[index].state === "newUserValidated") {
-		    servicelog("Request for new user: [" + account.username + "]");
-		    if(!createAccount(account)) {
-			servicelog("Account [" + account.username + "] already exists!");
-			setStatustoClient(connection, "Account already exists!");
-			sendable = { type: "createNewAccount" };
-			connection.send(JSON.stringify(sendable));
-			return
-		    } else {
-			globalConnectionList[index].state = "clientStarted";
-			setStatustoClient(connection, "Account created!");
-			sendable = { type: "loginView" }
-			connection.send(JSON.stringify(sendable));
-			setStatustoClient(connection, "Login");
-			return;
-		    }
-		}
-		if(globalConnectionList[index].state === "oldUserValidated") {
-		    servicelog("Request account change for user: [" + account.username + "]");
-		    var user = getUserByUserame(account.username);
-		    if(user.length === 0) {
-			globalConnectionList[index].state = "clientStarted";
-			setStatustoClient(connection, "Illegal user operation!");
-			sendable = { type: "loginView" }
-			connection.send(JSON.stringify(sendable));
-			setStatustoClient(connection, "Login");
-			return;
-		    } else {
-			updateUserAccount(account);
-			setStatustoClient(connection, "Account updated!");
-			sendable = { type: "loginView" }
-			connection.send(JSON.stringify(sendable));
-			setStatustoClient(connection, "Login");			
-			return;
-		    }
-		}
-	    }
-
-	    if((type === "confirmEmail") && (globalConnectionList[index].state
-					     === "clientStarted")) {
-		servicelog("Request for email verification: [" + content + "]");
-		sendEmailVerification(content);
-		sendable = { type: "loginView" }
-		connection.send(JSON.stringify(sendable));
-		setStatustoClient(connection, "Email sent!");
-	    }
-
-	    if((type === "validateAccount") && (globalConnectionList[index].state
-						=== "clientStarted")) {
-		if(!content.email || !content.challenge) {
-		    servicelog("Illegal validate account message");
-		    sendable = { type: "loginView" }
-		    connection.send(JSON.stringify(sendable));
-		    setStatustoClient(connection, "Login");
-		    return;
-		} else {
-		    servicelog("Validation code: " + JSON.stringify(content));
-		    account = validateAccountCode(content.email.toString());
-		    if((account !== false) && (Aes.Ctr.decrypt(content.challenge, account.token.key, 128)
-					       === "clientValidating")) {
-			globalConnectionList[index].state = "newUserValidated";
-			setStatustoClient(connection, "Validation code correct!");
-			globalConnectionList[index].key = account.token.key;
-			var newAccount = {email: account.email};
-			var user = getUserByEmail(account.email);
-			servicelog("user: " + JSON.stringify(user));
-			if(user.length !== 0) {
-			    newAccount.username = user[0].username;
-			    newAccount.realname = user[0].realname;
-			    newAccount.phone = user[0].phone;
-			    globalConnectionList[index].state = "oldUserValidated";
-			}
-			var cipheredEmail =  Aes.Ctr.encrypt(JSON.stringify(newAccount), account.token.key, 128);
-			sendable = { type: "createNewAccount",
-				     content: cipheredEmail };
-			connection.send(JSON.stringify(sendable));
-			return;
-		    } else {
-			setStatustoClient(connection, "Validation code failed!");
-			sendable = { type: "loginView" }
-			connection.send(JSON.stringify(sendable));
-			return;
-		    }
-		}
-	    }
-
+            if(type === "clientStarted") { processClientStarted(index); }
+	    if(type === "userLogin") { processUserLogin(index, content); }
+	    if(type === "loginResponse") { processLoginResponse(index, content); }
+	    if(type === "createAccount") { processCreateAccount(index, content); }
+	    if((type === "confirmEmail") && stateIs(index, "clientStarted")) { processConfirmEmail(index, content); }
+	    if((type === "validateAccount") && stateIs(index, "clientStarted")) { processValidateAccount(index, content); }
 
 	}
     });
@@ -226,6 +93,163 @@ wsServer.on('request', function(request) {
         globalConnectionList.splice(index, 1);
     });
 });
+
+function stateIs(index, state) {
+    return (globalConnectionList[index].state === state);
+}
+
+function setState(index, state) {
+    globalConnectionList[index].state = state;
+}
+
+function processClientStarted(index) {
+    setState(index, "clientStarted");
+    servicelog("Sending initial login view to client #" + index);
+    var sendable = { type: "loginView" }
+    sendPlainTextToClient(index, sendable);
+    setStatustoClient(index, "Login");
+}
+
+function processUserLogin(index, content) {
+    var sendable;
+    if(!content.username) {
+	servicelog("Illegal user login message");
+	sendable = { type: "loginView" }
+	sendPlainTextToClient(index, sendable);
+	setStatustoClient(index, "Login");
+	return;
+    } else {
+	var user = getUserByHashedName(content.username);
+	if(user.length === 0) {
+	    servicelog("Unknown user login attempt");
+	    sendable = { type: "loginView" }
+	    sendPlainTextToClient(index, sendable);
+	    setStatustoClient(index, "Login");
+	    return;
+	} else {
+	    globalConnectionList[index].user = user[0];
+	    globalConnectionList[index].aesKey = user[0].password;
+	    servicelog("User " + user[0].username + " logging in");
+	    var plainChallenge = getNewChallenge();
+	    servicelog("plainChallenge:   " + plainChallenge);
+	    globalConnectionList[index].challenge = plainChallenge;
+	    sendable = { type: "loginChallenge",
+			 content: plainChallenge };
+	    sendCipherTextToClient(index, sendable);
+	}
+    }
+}
+
+function processLoginResponse(index, content) {
+    servicelog("Received response");
+    var sendable;
+    var plainResponse = Aes.Ctr.decrypt(content, globalConnectionList[index].user.password, 128);
+
+    servicelog("plainResponse: " + plainResponse);
+    servicelog("challenge:     " + globalConnectionList[index].challenge);
+    servicelog("aesKey:        " + globalConnectionList[index].user.password);
+    servicelog("user:          " + JSON.stringify(globalConnectionList[index].user));
+
+    if(globalConnectionList[index].challenge === plainResponse) {
+	servicelog("User login OK");
+	setStatustoClient(index, "Login OK");
+        sendable = {type: "calendarData",
+		    content: getFileData().reservations };
+	sendPlainTextToClient(index, sendable);
+    } else {
+	servicelog("User login failed");
+	setStatustoClient(index, "Login Failed!");
+	sendable = { type: "loginView" }
+	sendPlainTextToClient(index, sendable);
+    }
+}
+
+function processCreateAccount(index, content) {
+    var sendable;
+    servicelog("temp passwd: " + JSON.stringify(globalConnectionList[index].aesKey));
+    account = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
+    if(stateIs(index, "newUserValidated")) {
+	servicelog("Request for new user: [" + account.username + "]");
+	if(!createAccount(account)) {
+	    servicelog("Account [" + account.username + "] already exists!");
+	    setStatustoClient(index, "Account already exists!");
+	    sendable = { type: "createNewAccount" };
+	    sendPlainTextToClient(index, sendable);
+	    return;
+	} else {
+	    setState(index, "clientStarted");
+	    setStatustoClient(index, "Account created!");
+	    sendable = { type: "loginView" }
+	    sendPlainTextToClient(index, sendable);
+	    setStatustoClient(index, "Login");
+	    return;
+	}
+    }
+    if(stateIs(index, "oldUserValidated")) {
+	servicelog("Request account change for user: [" + account.username + "]");
+	var user = getUserByUserame(account.username);
+	if(user.length === 0) {
+	    setState(index, "clientStarted");
+	    setStatustoClient(index, "Illegal user operation!");
+	    sendable = { type: "loginView" }
+	    sendPlainTextToClient(index, sendable);
+	    setStatustoClient(index, "Login");
+	    return;
+	} else {
+	    updateUserAccount(account);
+	    setStatustoClient(index, "Account updated!");
+	    sendable = { type: "loginView" }
+	    sendPlainTextToClient(index, sendable);
+	    setStatustoClient(index, "Login");			
+	    return;
+	}
+    }
+}
+
+function processConfirmEmail(index, content) {
+    servicelog("Request for email verification: [" + content + "]");
+    sendEmailVerification(content);
+    sendable = { type: "loginView" }
+    sendPlainTextToClient(index, sendable);
+    setStatustoClient(index, "Email sent!");
+}
+
+function processValidateAccount(index, content) {
+    if(!content.email || !content.challenge) {
+	servicelog("Illegal validate account message");
+	sendable = { type: "loginView" }
+	sendPlainTextToClient(index, sendable);
+	setStatustoClient(index, "Login");
+	return;
+    } else {
+	servicelog("Validation code: " + JSON.stringify(content));
+	account = validateAccountCode(content.email.toString());
+	if((account !== false) && (Aes.Ctr.decrypt(content.challenge, account.token.key, 128)
+				   === "clientValidating")) {
+	    setState(index, "newUserValidated");
+	    setStatustoClient(index, "Validation code correct!");
+	    globalConnectionList[index].aesKey = account.token.key;
+	    var newAccount = {email: account.email};
+	    var user = getUserByEmail(account.email);
+	    servicelog("user: " + JSON.stringify(user));
+	    if(user.length !== 0) {
+		newAccount.username = user[0].username;
+		newAccount.realname = user[0].realname;
+		newAccount.phone = user[0].phone;
+		setState(index, "oldUserValidated");
+	    }
+	    sendable = { type: "createNewAccount",
+			 content: newAccount };
+	    sendCipherTextToClient(index, sendable);
+	    return;
+	} else {
+	    setStatustoClient(index, "Validation code failed!");
+	    sendable = { type: "loginView" }
+	    sendPlainTextToClient(index, sendable);
+	    return;
+	}
+    }
+}
 
 function readUserData() {
     try {
