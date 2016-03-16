@@ -49,11 +49,10 @@ mySocket.onmessage = function (event) {
 
     if(receivable.type == "calendarData") {
 	var calendarData = receivable.content;
-	document.body.replaceChild(createLoginView(), document.getElementById("myDiv1"));
-/*	document.body.replaceChild(createCalendarView(calendarData),
+	document.body.replaceChild(createCalendarView(calendarData),
 				   document.getElementById("myDiv1"));
 	document.body.replaceChild(createConfirmButton(),
-				   document.getElementById("myConfirmButton")); */
+				   document.getElementById("myConfirmButton"));
     }
 }
 
@@ -469,7 +468,7 @@ function createCalendarView(calendarData) {
     var tableHeader = document.createElement('thead');
     tableHeader.appendChild(createHeader(calendarData.year));
     var tableBody = document.createElement('tbody');
-    table.id = "myCalendar";
+    tableBody.id = "myCalendar";
 
     calendarData.season.forEach(function(week) {
 	var row = createWeek(week);
@@ -505,6 +504,9 @@ function createWeek(week) {
     return row;
 }
 
+var dayIndex = 0;
+var dayList = [];
+
 function createDay(day) {
     var cell = document.createElement('td');
     cell.width="12%"
@@ -514,6 +516,8 @@ function createDay(day) {
     cell.onclick = function () { calendarCellClicked(this); };
 //    cell.appendChild(document.createTextNode(day.date));
 //    cell.appendChild(document.createTextNode(day.state)); /
+    cell.id = "calendarDay_" + dayIndex++;
+    dayList.push(cell.id);
     return cell;
 }
 
@@ -547,6 +551,33 @@ function createConfirmButton() {
 
 function sendChanges() {
     console.log("SendChanges event");
+    dayList.forEach(function (day) {
+	if(document.getElementById(day).state === 100) console.log(day);
+    });
+
+//    console.log(dayList);
+/*
+    var children = document.getElementById("myCalendar").childNodes[1].childNodes[1].childNodes;
+
+    var txt = "";
+    var i;
+    for (i = 0; i < children.length; i++) {
+	console.log(children[i].nodeName);
+    }
+
+    var sendable = { username: account.username,
+		     realname: account.realname,
+		     email: account.email,
+		     phone: account.phone,
+		     password: Sha1.hash(account.passwd1) }; 
+
+
+    div = document.createElement('div');
+    div.id = "myDiv1";
+    document.body.replaceChild(div, document.getElementById("myDiv1"));
+*/
+
+    sendToServerEncrypted("sendReservation", sendable);
 }
 
 function sendToServer(type, content) {
