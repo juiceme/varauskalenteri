@@ -86,7 +86,8 @@ wsServer.on('request', function(request) {
 	       stateIs(index, "clientStarted")) { processConfirmEmail(index, content); }
 	    if((type === "validateAccount") &&
 	       stateIs(index, "clientStarted")) { processValidateAccount(index, content); }
-
+	    if((type ==="sendReservation") &&
+	       stateIs(index, "loggedIn")) { processSendReservation(index, content); }
 	}
     });
 
@@ -149,8 +150,8 @@ function processLoginResponse(index, content) {
 	setState(index, "loggedIn");
 	setStatustoClient(index, "Login OK");
         sendable = {type: "calendarData",
-		    content: getFileData().reservations };
-	sendPlainTextToClient(index, sendable);
+		    content: getFileData() };
+	sendCipherTextToClient(index, sendable);
     } else {
 	servicelog("User login failed");
 	processClientStarted(index);
@@ -160,7 +161,7 @@ function processLoginResponse(index, content) {
 function processCreateAccount(index, content) {
     var sendable;
     servicelog("temp passwd: " + JSON.stringify(globalConnectionList[index].aesKey));
-    account = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
+    var account = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
     if(stateIs(index, "newUserValidated")) {
 	servicelog("Request for new user: [" + account.username + "]");
 	if(!createAccount(account)) {
@@ -234,6 +235,11 @@ function processValidateAccount(index, content) {
 	    return;
 	}
     }
+}
+
+function processSendReservation(index, content) {
+    var reservation = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
+    servicelog("received reservation: " + JSON.stringify(reservation));
 }
 
 function readUserData() {
@@ -393,7 +399,19 @@ function getFileData() {
         console.log(err.message);
         process.exit(1);
     }
-    return { reservations : reservationData };
+    var weeks = [];
+    reservationData.season.forEach(function(w) {
+	var days = [];
+	w.days.forEach(function(d) {
+	    var items = [];
+	    d.items.forEach(function(i) {
+		items.push({ "item" : i.item, "state" : i.state });
+	    });
+	    days.push({ "date" : d.date, "items" : items });
+	});
+	weeks.push({ "week" : w.week, days : days });
+    });
+    return { "year": reservationData.year, "season" : weeks };
 }
 
 servicelog("Waiting for client connection to port 8080...");

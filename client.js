@@ -464,13 +464,15 @@ function sendValidationCode(code) {
 }
 
 function createCalendarView(calendarData) {
+    clearText = JSON.parse(Aes.Ctr.decrypt(calendarData, sessionPassword, 128));
+    console.log(clearText);
     var table = document.createElement('table');
     var tableHeader = document.createElement('thead');
-    tableHeader.appendChild(createHeader(calendarData.year));
+    tableHeader.appendChild(createHeader(clearText.year));
     var tableBody = document.createElement('tbody');
     tableBody.id = "myCalendar";
 
-    calendarData.season.forEach(function(week) {
+    clearText.season.forEach(function(week) {
 	var row = createWeek(week);
 	tableBody.appendChild(row);
     });
@@ -511,34 +513,36 @@ function createDay(day) {
     var cell = document.createElement('td');
     cell.width="12%"
     cell.innerHTML = day.date + "<br><br>"
-    cell.state = day.state;
+    cell.state = day.items[0].state;
     cell.style.backgroundColor = colorCellState(cell.state);
     cell.onclick = function () { calendarCellClicked(this); };
 //    cell.appendChild(document.createTextNode(day.date));
 //    cell.appendChild(document.createTextNode(day.state)); /
-    cell.id = "calendarDay_" + dayIndex++;
+//    cell.id = "calendarDay_" + dayIndex++;
+    cell.id = day.date;
     dayList.push(cell.id);
     return cell;
 }
 
 function colorCellState(state) {
-    if(state === 0) {
-	return "#f0f0f0";
-    } else {
-	return "#ff0000";
-    }
+    if(state === "free") { return "#f0f0f0"; }
+    if(state === "reserved") { return "#ff0000"; }
+    if(state === "own") { return "#00ff00"; }
+    if(state === "unconfirmed") { return "#0000ff"; }    
 }
 
 function calendarCellClicked(cell) {
-    if(cell.state === 1) { return; }
-    if(cell.state === 0) {
-	cell.state = 100;
+    if(cell.state === "reserved") { return; }
+    if(cell.state === "free") {
+	cell.state = "own";
 	cell.style.backgroundColor = "#00ff00";
-    } else {
-	cell.state = 0;
-	cell.style.backgroundColor = "#f0f0f0";
+	return;
     }
-
+    if (cell.state === "own") {
+	cell.state = "free";
+	cell.style.backgroundColor = "#f0f0f0";
+	return;
+    }
 }
 
 function createConfirmButton() {
@@ -550,33 +554,11 @@ function createConfirmButton() {
 }
 
 function sendChanges() {
-    console.log("SendChanges event");
-    dayList.forEach(function (day) {
-	if(document.getElementById(day).state === 100) console.log(day);
+    var days = dayList.filter(function(day) {
+	return (document.getElementById(day).state === "own");
     });
 
-//    console.log(dayList);
-/*
-    var children = document.getElementById("myCalendar").childNodes[1].childNodes[1].childNodes;
-
-    var txt = "";
-    var i;
-    for (i = 0; i < children.length; i++) {
-	console.log(children[i].nodeName);
-    }
-
-    var sendable = { username: account.username,
-		     realname: account.realname,
-		     email: account.email,
-		     phone: account.phone,
-		     password: Sha1.hash(account.passwd1) }; 
-
-
-    div = document.createElement('div');
-    div.id = "myDiv1";
-    document.body.replaceChild(div, document.getElementById("myDiv1"));
-*/
-
+    var sendable = { reservation: days };
     sendToServerEncrypted("sendReservation", sendable);
 }
 
