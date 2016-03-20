@@ -524,23 +524,30 @@ function createDay(day) {
     return cell;
 }
 
+var COLOR_FREE = "#f0f0f0";
+var COLOR_OWN = "#6698ff";
+var COLOR_OWN_CONFIRMED = "#0041C2";
+var COLOR_RESERVED = "#ff0000";
+var COLOR_UNCONFIRMED = "#faafbe";
+
 function colorCellState(state) {
-    if(state === "free") { return "#f0f0f0"; }
-    if(state === "reserved") { return "#ff0000"; }
-    if(state === "own") { return "#00ff00"; }
-    if(state === "unconfirmed") { return "#0000ff"; }    
+    if(state === "free") { return COLOR_FREE; }
+    if(state === "reserved") { return COLOR_RESERVED; }
+    if(state === "own") { return COLOR_OWN; }
+    if(state === "own_confirmed") { return COLOR_OWN_CONFIRMED; }
+    if(state === "unconfirmed") { return COLOR_UNCONFIRMED; }    
 }
 
 function calendarCellClicked(cell) {
     if(cell.state === "reserved") { return; }
     if(cell.state === "free") {
 	cell.state = "own";
-	cell.style.backgroundColor = "#00ff00";
+	cell.style.backgroundColor = COLOR_OWN;
 	return;
     }
     if (cell.state === "own") {
 	cell.state = "free";
-	cell.style.backgroundColor = "#f0f0f0";
+	cell.style.backgroundColor = COLOR_FREE;
 	return;
     }
 }
