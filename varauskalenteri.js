@@ -396,8 +396,16 @@ function getFileData() {
     try {
         var reservationData = JSON.parse(fs.readFileSync("./configuration/reservations.json"));
     } catch (err) {
-        console.log(err.message);
-        process.exit(1);
+	if(err.code === "ENOENT") {
+	    // If file is not found, no problem. Just create a new one.
+	    servicelog("Empty calendar database, creating new");
+	    var reservationData = { year : "2016", season : [] };
+	    fs.writeFileSync("./configuration/reservations.json", JSON.stringify(reservationData));
+	} else {
+	    // If some other problem, then exit.
+	    servicelog("Error processing calendar database: " + err.message);
+	    process.exit(1);
+	}
     }
     var weeks = [];
     reservationData.season.forEach(function(w) {
