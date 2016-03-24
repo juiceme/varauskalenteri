@@ -4,6 +4,7 @@ var fs = require("fs");
 var Aes = require('./crypto/aes.js');
 Aes.Ctr = require('./crypto/aes-ctr.js');
 var sha1 = require('./crypto/sha1.js');
+var datastorage = require('./datastorage/datastorage.js');
 
 var globalConnectionList = [];
 var globalSalt = sha1.hash(JSON.stringify(new Date().getTime()));
@@ -243,20 +244,10 @@ function processSendReservation(index, content) {
 }
 
 function readUserData() {
-    try {
-	var userData = JSON.parse(fs.readFileSync("./configuration/users.json"));
-    } catch(err) {
-	if(err.code === "ENOENT") {
-	    // If file is not found, no problem. Just create a new one.
-	    servicelog("Empty user database, creating new");
-	    var userData = { users : [] };
-	    fs.writeFileSync("./configuration/users.json", JSON.stringify(userData));
-	} else {
-	    // If some other problem, then exit.
-	    servicelog("Error processing used database: " + err.message);
-	    process.exit(1);
-	}
-    }
+    userData = datastorage.read("users");
+    if(userData === false) {
+	servicelog("User database read failed");
+    } 
     return userData;
 }
 
@@ -275,12 +266,11 @@ function updateUserAccount(account) {
 	account.hash = sha1.hash(account.username);
 	account.status = "pending";
 	newUserData.users.push(account);
-	try {
-	    fs.writeFileSync("./configuration/users.json", JSON.stringify(newUserData));
-	} catch(err) {
-	    servicelog("User database write failed: " + err.message);
+	if(datastorage.write("users", newUserData) === false) {
+	    servicelog("User database write failed");
+	} else {
+	    servicelog("Updated User Account: " + JSON.stringify(account));
 	}
-	servicelog("Updated User Account: " + JSON.stringify(account));
 	return true;
     }
 }
@@ -314,29 +304,21 @@ function createAccount(account) {
 	account.hash = sha1.hash(account.username);
 	account.status = "pending";
 	userData.users.push(account);
-	try {
-	    fs.writeFileSync("./configuration/users.json", JSON.stringify(userData));
-	} catch(err) {
-	    servicelog("User database write failed: " + err.message);
+	if(datastorage.write("users", userData) === false) {
+	    servicelog("User database write failed");
+	    return false;
+	} else {
+	    return true;
 	}
-	return true;
     }
 }
 
 function validateAccountCode(code) {
-    try {
-	var userData = JSON.parse(fs.readFileSync("./configuration/pending.json"));
-    } catch(err) {
-	if(err.code === "ENOENT") {
-	    // If file is not found, nothing to verify.
-	    servicelog("Empty pending requests database, bailing out");
-	    return false;
-	} else {
-	    // If some other problem, then exit.
-	    servicelog("Error processing pending requests database: " + err.message);
-	    process.exit(1);
-	}
-    }
+    var userData = datastorage.read("pending");
+    if(Object.keys(userData).length === 0) {
+	servicelog("Empty pending requests database, bailing out");
+	return false;
+    } 
     var target = userData.pending.filter(function(u) {
 	return u.token.mail === code.slice(0, 8);
     });
@@ -347,39 +329,24 @@ function validateAccountCode(code) {
 	newUserData.pending = userData.pending.filter(function(u) {
 	    return u.token.mail !== code.slice(0, 8);
 	});
-	try {
-	    fs.writeFileSync("./configuration/pending.json", JSON.stringify(newUserData));
-	} catch(err) {
-	    servicelog("Pending requests database write failed: " + err.message);
+
+	if(datastorage.write("pending", newUserData) === false) {
+	    servicelog("Pending requests database write failed");
+	} else {
+	    servicelog("Removed pending request from database");
 	}
-	servicelog("Removed pending request from database");
 	return target[0];
     }
 }
 
 function sendEmailVerification(email) {
-    try {
-	var userData = JSON.parse(fs.readFileSync("./configuration/pending.json"));
-    } catch(err) {
-	if(err.code === "ENOENT") {
-	    // If file is not found, no problem. Just create a new one.
-	    servicelog("Empty pending requests database, creating new");
-	    var userData = { pending : [] };
-	    fs.writeFileSync("./configuration/pending.json", JSON.stringify(userData));
-	} else {
-	    // If some other problem, then exit.
-	    servicelog("Error processing pending requests database: " + err.message);
-	    process.exit(1);
-	}
-    }
+    var userData = datastorage.read("pending");
     var request = { email: email,
 		    token: generateEmailToken(email),
 		    date: new Date().getTime() };
     userData.pending.push(request);
-    try {
-	fs.writeFileSync("./configuration/pending.json", JSON.stringify(userData));
-    } catch(err) {
-	servicelog("Pending requests database write failed: " + err.message);
+    if(datastorage.write("pending", userData) === false) {
+	servicelog("Pending database write failed");
     }
 }
 
@@ -393,20 +360,7 @@ function getNewChallenge() {
 }
 
 function getFileData() {
-    try {
-        var reservationData = JSON.parse(fs.readFileSync("./configuration/reservations.json"));
-    } catch (err) {
-	if(err.code === "ENOENT") {
-	    // If file is not found, no problem. Just create a new one.
-	    servicelog("Empty calendar database, creating new");
-	    var reservationData = { year : "2016", season : [] };
-	    fs.writeFileSync("./configuration/reservations.json", JSON.stringify(reservationData));
-	} else {
-	    // If some other problem, then exit.
-	    servicelog("Error processing calendar database: " + err.message);
-	    process.exit(1);
-	}
-    }
+    var reservationData = datastorage.read("reservations");
     var weeks = [];
     reservationData.season.forEach(function(w) {
 	var days = [];
@@ -423,4 +377,10 @@ function getFileData() {
 }
 
 servicelog("Waiting for client connection to port 8080...");
+
+datastorage.initialize("users", { users : [] });
+datastorage.initialize("pending", { pending : [] });
+datastorage.initialize("reservations", { year : "2016", season : [] });
+datastorage.setLogger(servicelog);
+
 serveClientPage();
