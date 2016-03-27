@@ -513,7 +513,9 @@ function createDay(day) {
     var cell = document.createElement('td');
     cell.width="12%"
     cell.innerHTML = day.date + "<br><br>"
-    cell.state = day.items[0].state;
+    console.log(JSON.stringify(day));
+    cell.state = day.items.state;
+    cell.title = getCellTitle(day.items.state);
     cell.style.backgroundColor = colorCellState(cell.state);
     cell.onclick = function () { calendarCellClicked(this); };
 //    cell.appendChild(document.createTextNode(day.date));
@@ -525,27 +527,45 @@ function createDay(day) {
 }
 
 var COLOR_FREE = "#f0f0f0";
-var COLOR_OWN = "#6698ff";
+var COLOR_OWN_RESERVED = "#6698ff";
+var COLOR_OTHER_RESERVED = "#f1948a";
+var COLOR_BOTH_RESERVED = "#ff00FF";
 var COLOR_OWN_CONFIRMED = "#0041C2";
-var COLOR_RESERVED = "#ff0000";
-var COLOR_UNCONFIRMED = "#faafbe";
+var COLOR_OTHER_CONFIRMED = "#FF0000";
+var COLOR_OWN_UNCONFIRMED = "#82e0aa";
 
 function colorCellState(state) {
     if(state === "free") { return COLOR_FREE; }
-    if(state === "reserved") { return COLOR_RESERVED; }
-    if(state === "own") { return COLOR_OWN; }
+    if(state === "own_reserved") { return COLOR_OWN_RESERVED; }
+    if(state === "other_reserved") { return COLOR_OTHER_RESERVED; }
+    if(state === "both_reserved") { return COLOR_BOTH_RESERVED; }    
     if(state === "own_confirmed") { return COLOR_OWN_CONFIRMED; }
-    if(state === "unconfirmed") { return COLOR_UNCONFIRMED; }    
+    if(state === "other_confirmed") { return COLOR_OTHER_CONFIRMED; }
+    if(state === "unconfirmed") { return COLOR_OWN_UNCONFIRMED; }    
+}
+
+function getCellTitle(state) {
+    if(state === "free") { return "free"; }
+    if(state === "own_reserved") { return "reserved for you"; }
+    if(state === "other_reserved") { return "reserved for others"; }
+    if(state === "both_reserved") { return "reserved for you"; }    
+    if(state === "own_confirmed") { return "confirmed for you"; }
+    if(state === "other_confirmed") { return "confirmed for others"; }
+    if(state === "unconfirmed") { return "reserved for you"; }    
 }
 
 function calendarCellClicked(cell) {
-    if(cell.state === "reserved") { return; }
     if(cell.state === "free") {
-	cell.state = "own";
-	cell.style.backgroundColor = COLOR_OWN;
+	cell.state = "own_reserved";
+	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
 	return;
     }
-    if (cell.state === "own") {
+    if (cell.state === "other_reserved") {
+	cell.state = "own_reserved";
+	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
+	return;
+    }
+    if (cell.state === "own_reserved") {
 	cell.state = "free";
 	cell.style.backgroundColor = COLOR_FREE;
 	return;
@@ -562,7 +582,7 @@ function createConfirmButton() {
 
 function sendChanges() {
     var days = dayList.filter(function(day) {
-	return (document.getElementById(day).state === "own");
+	return (document.getElementById(day).state === "own_reserved");
     });
 
     var sendable = { reservation: days };

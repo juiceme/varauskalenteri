@@ -151,7 +151,7 @@ function processLoginResponse(index, content) {
 	setState(index, "loggedIn");
 	setStatustoClient(index, "Login OK");
         sendable = {type: "calendarData",
-		    content: getFileData() };
+		    content: createCalendarSendable(globalConnectionList[index].user.username) };
 	sendCipherTextToClient(index, sendable);
     } else {
 	servicelog("User login failed");
@@ -242,10 +242,15 @@ function processSendReservation(index, content) {
     var reservation = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
     servicelog("received reservation: " + JSON.stringify(reservation));
     var reservationData = datastorage.read("reservations");
-    reservationData.reservations.push({ user: globalConnectionList[index].user.username,
-					reservation: reservation.reservation,
-					state: "pending" });
-    if(datastorage.write("reservations", reservationData) === false) {
+    var newReservations = reservationData.reservations.filter(function(r) {
+	return ((r.user !== globalConnectionList[index].user.username) || (r.state === "reserved"));
+    });
+    if(reservation.reservation.length !== 0) {
+	newReservations.push({ user: globalConnectionList[index].user.username,
+			       reservation: reservation.reservation,
+			       state: "pending" });
+    }
+    if(datastorage.write("reservations", { reservations: newReservations }) === false) {
 	servicelog("Reservation database write failed");
     } else {
 	servicelog("Updated reservation database: " + JSON.stringify(reservationData));
@@ -369,21 +374,51 @@ function getNewChallenge() {
     return ("challenge_" + sha1.hash(globalSalt + new Date().getTime().toString()) + "1");
 }
 
-function getFileData() {
+function createCalendarSendable(user) {
     var calendarData = datastorage.read("calendar");
     var weeks = [];
     calendarData.season.forEach(function(w) {
 	var days = [];
 	w.days.forEach(function(d) {
-	    var items = [];
-	    d.items.forEach(function(i) {
-		items.push({ "item" : i.item, "state" : i.state });
-	    });
-	    days.push({ "date" : d.date, "items" : items });
+	    days.push({ "date" : d.date,
+			"items" : getReservationsForDay(d, user) });
 	});
 	weeks.push({ "week" : w.week, days : days });
     });
+
     return { "year": calendarData.year, "season" : weeks };
+}
+
+function getReservationsForDay(day, user) {
+    var itemData = datastorage.read("rentables");
+    var reservationData = datastorage.read("reservations");
+    var reservation = [];
+    reservationData.reservations.forEach(function(r) {
+	if(r.reservation.filter(function(f) {
+	    return f === day.date
+	}).length !== 0 ) {
+	    if(r.user === user) {
+		reservation.push({user: r.user, state: r.state});
+	    } else {
+		reservation.push({user: "", state: r.state});
+	    }
+	}
+    });
+
+    // if there is a confirmed registration return it
+    var result = reservation.filter(function(r) { return r.state === "reserved"; });
+    if(result.length !== 0) {
+	if(result[0].user === user) { return { state: "own_confirmed" }; }
+	else { return { state: "other_confirmed" }; }
+    }
+
+    // check and return pending registrations
+    var ownReservation = reservation.filter(function(r) { return r.user === user; }).length;
+    var otherReservation = reservation.filter(function(r) { return r.user !== user; }).length;
+    if((ownReservation === 0) && (otherReservation === 0)) return { state: "free" };
+    if(ownReservation === 0) return { state: "other_reserved" };
+    if(otherReservation === 0) return { state: "own_reserved" };
+    return { state: "both_reserved" };
 }
 
 servicelog("Waiting for client connection to port 8080...");
@@ -393,5 +428,6 @@ datastorage.initialize("users", { users : [] });
 datastorage.initialize("pending", { pending : [] });
 datastorage.initialize("calendar", { year : "2016", season : [] });
 datastorage.initialize("reservations", { reservations : [] });
+datastorage.initialize("rentables", { rentables : [] });
 
 serveClientPage();
