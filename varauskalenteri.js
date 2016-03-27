@@ -241,6 +241,16 @@ function processValidateAccount(index, content) {
 function processSendReservation(index, content) {
     var reservation = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
     servicelog("received reservation: " + JSON.stringify(reservation));
+    var reservationData = datastorage.read("reservations");
+    reservationData.reservations.push({ user: globalConnectionList[index].user.username,
+					reservation: reservation.reservation,
+					state: "pending" });
+    if(datastorage.write("reservations", reservationData) === false) {
+	servicelog("Reservation database write failed");
+    } else {
+	servicelog("Updated reservation database: " + JSON.stringify(reservationData));
+    }
+    setStatustoClient(index, "Reservation sent");
 }
 
 function readUserData() {
@@ -360,9 +370,9 @@ function getNewChallenge() {
 }
 
 function getFileData() {
-    var reservationData = datastorage.read("reservations");
+    var calendarData = datastorage.read("calendar");
     var weeks = [];
-    reservationData.season.forEach(function(w) {
+    calendarData.season.forEach(function(w) {
 	var days = [];
 	w.days.forEach(function(d) {
 	    var items = [];
@@ -373,14 +383,15 @@ function getFileData() {
 	});
 	weeks.push({ "week" : w.week, days : days });
     });
-    return { "year": reservationData.year, "season" : weeks };
+    return { "year": calendarData.year, "season" : weeks };
 }
 
 servicelog("Waiting for client connection to port 8080...");
 
+// datastorage.setLogger(servicelog);
 datastorage.initialize("users", { users : [] });
 datastorage.initialize("pending", { pending : [] });
-datastorage.initialize("reservations", { year : "2016", season : [] });
-datastorage.setLogger(servicelog);
+datastorage.initialize("calendar", { year : "2016", season : [] });
+datastorage.initialize("reservations", { reservations : [] });
 
 serveClientPage();
