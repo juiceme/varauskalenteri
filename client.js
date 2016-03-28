@@ -27,7 +27,6 @@ mySocket.onopen = function (event) {
 
 mySocket.onmessage = function (event) {
     var receivable = JSON.parse(event.data);
-//    console.log(JSON.stringify(receivable));
     if(receivable.type == "statusData") {
         document.getElementById("myStatusField").value = receivable.content;
     }
@@ -51,7 +50,7 @@ mySocket.onmessage = function (event) {
 	var calendarData = receivable.content;
 	document.body.replaceChild(createCalendarView(calendarData),
 				   document.getElementById("myDiv1"));
-	document.body.replaceChild(createConfirmButton(),
+	document.body.replaceChild(createCheckReservationButton(),
 				   document.getElementById("myConfirmButton"));
     }
 }
@@ -465,7 +464,6 @@ function sendValidationCode(code) {
 
 function createCalendarView(calendarData) {
     clearText = JSON.parse(Aes.Ctr.decrypt(calendarData, sessionPassword, 128));
-    console.log(clearText);
     var table = document.createElement('table');
     var tableHeader = document.createElement('thead');
     tableHeader.appendChild(createHeader(clearText.year));
@@ -479,11 +477,17 @@ function createCalendarView(calendarData) {
 
     table.appendChild(tableHeader);
     table.appendChild(tableBody);
+    table.id= "myDiv1";
 
     return table;
 }
 
+var dayIndex;
+var dayList;
+
 function createHeader(year) {
+    dayIndex = 0;
+    dayList = [];
     var days = ["Season " + year , "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" ];
     var row = document.createElement('tr');
     days.forEach(function(day) {
@@ -506,27 +510,25 @@ function createWeek(week) {
     return row;
 }
 
-var dayIndex = 0;
-var dayList = [];
-
 function createDay(day) {
     var cell = document.createElement('td');
     cell.width="12%"
     cell.innerHTML = day.date + "<br><br>"
-    console.log(JSON.stringify(day));
     cell.state = day.items.state;
+    cell.daytype = day.type;
     cell.title = getCellTitle(day.items.state);
-    cell.style.backgroundColor = colorCellState(cell.state);
+    cell.style.backgroundColor = colorCellState(cell.state, cell.daytype);
     cell.onclick = function () { calendarCellClicked(this); };
 //    cell.appendChild(document.createTextNode(day.date));
 //    cell.appendChild(document.createTextNode(day.state)); /
 //    cell.id = "calendarDay_" + dayIndex++;
     cell.id = day.date;
-    dayList.push(cell.id);
+    dayList.push({ date: cell.id, type: cell.daytype });
     return cell;
 }
 
-var COLOR_FREE = "#f0f0f0";
+var COLOR_FREE1 = "#f0f0f0";
+var COLOR_FREE2 = "#d0d0d0";
 var COLOR_OWN_RESERVED = "#6698ff";
 var COLOR_OTHER_RESERVED = "#f1948a";
 var COLOR_BOTH_RESERVED = "#ff00FF";
@@ -534,58 +536,157 @@ var COLOR_OWN_CONFIRMED = "#0041C2";
 var COLOR_OTHER_CONFIRMED = "#FF0000";
 var COLOR_OWN_UNCONFIRMED = "#82e0aa";
 
-function colorCellState(state) {
-    if(state === "free") { return COLOR_FREE; }
+function colorCellState(state, daytype) {
+    if(state === "free" && daytype === "weekend") { return COLOR_FREE2; }
+    if(state === "free" && daytype === "weekday") { return COLOR_FREE1; }
     if(state === "own_reserved") { return COLOR_OWN_RESERVED; }
     if(state === "other_reserved") { return COLOR_OTHER_RESERVED; }
     if(state === "both_reserved") { return COLOR_BOTH_RESERVED; }    
     if(state === "own_confirmed") { return COLOR_OWN_CONFIRMED; }
     if(state === "other_confirmed") { return COLOR_OTHER_CONFIRMED; }
     if(state === "unconfirmed") { return COLOR_OWN_UNCONFIRMED; }    
+    if(state === "unconfirmed_conditional") { return COLOR_OWN_UNCONFIRMED; }    
 }
 
 function getCellTitle(state) {
     if(state === "free") { return "free"; }
     if(state === "own_reserved") { return "reserved for you"; }
     if(state === "other_reserved") { return "reserved for others"; }
-    if(state === "both_reserved") { return "reserved for you"; }    
+    if(state === "both_reserved") { return "conditionally reserved for you"; }    
     if(state === "own_confirmed") { return "confirmed for you"; }
     if(state === "other_confirmed") { return "confirmed for others"; }
-    if(state === "unconfirmed") { return "reserved for you"; }    
+    if(state === "unconfirmed") { return "marked for you"; }    
+    if(state === "unconfirmed_conditional") { return "marked for you"; }    
 }
 
 function calendarCellClicked(cell) {
+    document.getElementById("myStatusField").value = "Editing reservation";
+
+    document.body.replaceChild(createCheckReservationButton(),
+			       document.getElementById("myConfirmButton"));
+
     if(cell.state === "free") {
-	cell.state = "own_reserved";
+	cell.state = "unconfirmed";
 	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
+	cell.title = getCellTitle(cell.state);
 	return;
     }
-    if (cell.state === "other_reserved") {
-	cell.state = "own_reserved";
-	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
+    if(cell.state === "unconfirmed") {
+	cell.state = "free";
+	if(cell.daytype === "weekday") {
+	    cell.style.backgroundColor = COLOR_FREE1;
+	} else {
+	    cell.style.backgroundColor = COLOR_FREE2;
+	}
+	cell.title = getCellTitle(cell.state);
 	return;
     }
     if (cell.state === "own_reserved") {
 	cell.state = "free";
-	cell.style.backgroundColor = COLOR_FREE;
+	if(cell.daytype === "weekday") {
+	    cell.style.backgroundColor = COLOR_FREE1;
+	} else {
+	    cell.style.backgroundColor = COLOR_FREE2;
+	}
+	cell.title = getCellTitle(cell.state);
+	return;
+    }
+    if (cell.state === "other_reserved") {
+	cell.state = "unconfirmed_conditional";
+	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
+	cell.title = getCellTitle(cell.state);
+	return;
+    }
+    if (cell.state === "unconfirmed_conditional") {
+	cell.state = "other_reserved";
+	cell.style.backgroundColor = COLOR_OTHER_RESERVED;
+	cell.title = getCellTitle(cell.state);
+	return;
+    }
+    if (cell.state === "both_reserved") {
+	cell.state = "other_reserved";
+	cell.style.backgroundColor = COLOR_OTHER_RESERVED;
+	cell.title = getCellTitle(cell.state);
 	return;
     }
 }
 
 function createConfirmButton() {
+    var table = document.createElement('table');
+    var tHeader = document.createElement('thead');
+    var tBody = document.createElement('tbody');
+    var hRow = document.createElement('tr');
+    var hCell = document.createElement('td');
+    var bRow = document.createElement('tr');
+    var bCell1 = document.createElement('td');
+    var bCell2 = document.createElement('td');
+    var totalsField = document.createElement("textarea");
     var button = document.createElement("button");
-    button.onclick = function() { sendChanges(); }
-    var text = document.createTextNode("Confirm");
+
+    setElementStyle(hCell);
+    hRow.appendChild(hCell);
+    setElementStyle(hRow);
+    tHeader.appendChild(hRow);
+    table.appendChild(tHeader);
+
+    button.onclick = function() { confirmReservation(); }
+    var text = document.createTextNode("Confirm reservation");
     button.appendChild(text);
+    totalsField.rows = "1";
+    totalsField.cols = "70";
+
+    totalsField.id = "myTotalsField";
+
+    setElementStyle(bCell1);
+    setElementStyle(bCell2);
+
+    bCell1.appendChild(button);
+    bCell2.appendChild(totalsField);
+    
+    bRow.appendChild(bCell1);
+    bRow.appendChild(bCell2);
+    tBody.appendChild(bRow);
+    table.appendChild(tBody);
+    table.id = "myConfirmButton";
+    return table;
+}
+
+function createCheckReservationButton() {
+    var button = document.createElement("button");
+    button.onclick = function() { checkReservation(); }
+    var text = document.createTextNode("Check reservation");
+    button.appendChild(text);
+    button.id = "myConfirmButton";
     return button;
 }
 
-function sendChanges() {
-    var days = dayList.filter(function(day) {
-	return (document.getElementById(day).state === "own_reserved");
+function getReservedDays() {
+    return dayList.filter(function(day) {
+	return ((document.getElementById(day.date).state === "own_reserved") ||
+		(document.getElementById(day.date).state === "both_reserved") ||
+		(document.getElementById(day.date).state === "unconfirmed") ||
+		(document.getElementById(day.date).state === "unconfirmed_conditional"));
     });
+}
 
-    var sendable = { reservation: days };
+function checkReservation() {
+    var weekDays = getReservedDays().filter(function(d) { return d.type === "weekday"; }).length;
+    var weekendDays = getReservedDays().filter(function(d) { return d.type === "weekend"; }).length;
+    var totalPrice = (weekDays * 75) + (weekendDays * 150);
+    var discount = 0;
+    if(((weekDays + weekendDays) > 7) && (weekendDays > 1)) { discount = 100; }
+    if(((weekDays + weekendDays) > 14) && (weekendDays > 3)) { discount = 200; }
+    if(((weekDays + weekendDays) > 21) && (weekendDays > 5)) { discount = 300; }
+    if(((weekDays + weekendDays) > 28) && (weekendDays > 7)) { discount = 400; }
+    document.body.replaceChild(createConfirmButton(),
+			       document.getElementById("myConfirmButton"));
+    document.getElementById("myTotalsField").value =
+	"Reservation for " + weekDays + "+" + weekendDays + " days: " + (totalPrice - discount) +
+	" euros, including discount of " + discount + " euros."  
+}
+
+function confirmReservation() {
+    var sendable = { reservation: getReservedDays().map(function(d) { return d.date; }) };
     sendToServerEncrypted("sendReservation", sendable);
 }
 

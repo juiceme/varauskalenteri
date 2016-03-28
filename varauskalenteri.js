@@ -256,6 +256,9 @@ function processSendReservation(index, content) {
 	servicelog("Updated reservation database: " + JSON.stringify(reservationData));
     }
     setStatustoClient(index, "Reservation sent");
+    sendable = {type: "calendarData",
+		content: createCalendarSendable(globalConnectionList[index].user.username) };
+    sendCipherTextToClient(index, sendable);
 }
 
 function readUserData() {
@@ -380,13 +383,14 @@ function createCalendarSendable(user) {
     calendarData.season.forEach(function(w) {
 	var days = [];
 	w.days.forEach(function(d) {
-	    days.push({ "date" : d.date,
-			"items" : getReservationsForDay(d, user) });
+	    days.push({ date: d.date,
+			type: d.type,
+			items: getReservationsForDay(d, user) });
 	});
-	weeks.push({ "week" : w.week, days : days });
+	weeks.push({ week: w.week, days: days });
     });
 
-    return { "year": calendarData.year, "season" : weeks };
+    return { year: calendarData.year, season: weeks };
 }
 
 function getReservationsForDay(day, user) {
