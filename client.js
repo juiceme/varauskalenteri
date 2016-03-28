@@ -9,8 +9,10 @@
 <body>
 <form> status: <input type="text" id="myStatusField" value="" disabled></form>
 <br>
+<div id= "myLogoutButton"> </div>
+<br><br>
 <div id= "myDiv1"> </div>
-<br>
+<br><br>
 <div id = "myConfirmButton"> </div>
 
 <script language="javascript" type="text/javascript">
@@ -48,6 +50,8 @@ mySocket.onmessage = function (event) {
 
     if(receivable.type == "calendarData") {
 	var calendarData = receivable.content;
+	document.body.replaceChild(createLogoutButton(),
+				   document.getElementById("myLogoutButton"));
 	document.body.replaceChild(createCalendarView(calendarData),
 				   document.getElementById("myDiv1"));
 	document.body.replaceChild(createCheckReservationButton(),
@@ -482,6 +486,31 @@ function createCalendarView(calendarData) {
     return table;
 }
 
+function createLogoutButton() {
+    var button = document.createElement("button");  
+    button.onclick = function() { logout(); }
+    var text = document.createTextNode("Logout");
+    button.appendChild(text);
+    button.id = "myLogoutButton";
+    return button;
+}
+
+function logout() {
+    div1 = document.createElement("div");
+    document.body.replaceChild(div1, document.getElementById("myLogoutButton"));
+    div1.id = "myLogoutButton";
+    div2 = document.createElement("div");
+    document.body.replaceChild(div2, document.getElementById("myDiv1"));
+    div2.id = "myDiv1";
+    div3 = document.createElement("div");
+    document.body.replaceChild(div3, document.getElementById("myConfirmButton"));
+    div3.id = "myConfirmButton";
+
+    var sendable = {type:"clientStarted", content:"none"};
+    mySocket.send(JSON.stringify(sendable));
+    document.getElementById("myStatusField").value = "started";
+}
+
 var dayIndex;
 var dayList;
 
@@ -672,7 +701,6 @@ function getReservedDays() {
 function checkReservation() {
     var weekDays = getReservedDays().filter(function(d) { return d.type === "weekday"; }).length;
     var weekendDays = getReservedDays().filter(function(d) { return d.type === "weekend"; }).length;
-    var totalPrice = (weekDays * 75) + (weekendDays * 150);
     var discount = 0;
     if(((weekDays + weekendDays) > 7) && (weekendDays > 1)) { discount = 100; }
     if(((weekDays + weekendDays) > 14) && (weekendDays > 3)) { discount = 200; }
@@ -680,9 +708,13 @@ function checkReservation() {
     if(((weekDays + weekendDays) > 28) && (weekendDays > 7)) { discount = 400; }
     document.body.replaceChild(createConfirmButton(),
 			       document.getElementById("myConfirmButton"));
-    document.getElementById("myTotalsField").value =
-	"Reservation for " + weekDays + "+" + weekendDays + " days: " + (totalPrice - discount) +
-	" euros, including discount of " + discount + " euros."  
+    document.getElementById("myTotalsField").value = showTotals(weekDays, weekendDays, discount);
+}
+
+function showTotals(weekDays, weekendDays, discount) {
+    var totalPrice = (weekDays * 75) + (weekendDays * 150);
+    return "Reservation for " + weekDays + "+" + weekendDays + " days: " + (totalPrice - discount) +
+	" euros, including discount of " + discount + " euros.";
 }
 
 function confirmReservation() {
