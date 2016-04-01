@@ -1,6 +1,7 @@
 var websocket = require("websocket");
 var http = require("http");
 var fs = require("fs");
+var email = require("emailjs/email");
 var Aes = require('./crypto/aes.js');
 Aes.Ctr = require('./crypto/aes-ctr.js');
 var sha1 = require('./crypto/sha1.js');
@@ -190,7 +191,7 @@ function processCreateAccount(index, content) {
 
 function processConfirmEmail(index, content) {
     servicelog("Request for email verification: [" + content + "]");
-    sendEmailVerification(content);
+    sendEmailVerification(index, content);
     processClientStarted(index);
     setStatustoClient(index, "Email sent!");
 }
@@ -274,7 +275,6 @@ function updateUserAccount(account) {
 	    return u.username !== account.username;
 	});
 	account.hash = sha1.hash(account.username);
-	account.status = "pending";
 	newUserData.users.push(account);
 	if(datastorage.write("users", newUserData) === false) {
 	    servicelog("User database write failed");
@@ -312,7 +312,6 @@ function createAccount(account) {
 	return false;
     } else {
 	account.hash = sha1.hash(account.username);
-	account.status = "pending";
 	userData.users.push(account);
 	if(datastorage.write("users", userData) === false) {
 	    servicelog("User database write failed");
@@ -349,15 +348,41 @@ function validateAccountCode(code) {
     }
 }
 
-function sendEmailVerification(email) {
+function sendEmailVerification(index, recipientAddress) {
     var userData = datastorage.read("pending");
-    var request = { email: email,
-		    token: generateEmailToken(email),
+    var request = { email: recipientAddress,
+		    token: generateEmailToken(recipientAddress),
 		    date: new Date().getTime() };
     userData.pending.push(request);
     if(datastorage.write("pending", userData) === false) {
 	servicelog("Pending database write failed");
     }
+    var emailData = datastorage.read("email");
+    var emailBody = "You have requested a new account or password reset of Varauskalenteri.\r\n\r\n" +
+	"Copy the following code to the \"validation code\" field and push \"Validate Account!\" button\r\n" +
+	"Your validation code: " + request.token.mail +  request.token.key + "\r\n\r\n" +
+	"   -Administrator-\r\n";
+    if(emailData.blindlyTrust) {
+	servicelog("Trusting self-signed certificates");
+	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    }
+    email.server.connect({
+	user: emailData.user,
+	password: emailData.password,
+	host: emailData.host,
+	ssl: emailData.ssl
+    }).send({ text: emailBody,
+	      from: emailData.sender,
+	      to: recipientAddress,
+	      subject: "Your password for Varauskalenteri" }, function(err, message) {
+		  if(err) {
+		      servicelog(err + " : " + JSON.stringify(message));
+		      setStatustoClient(index, "Failed sending email!");
+		  } else {
+		      servicelog("Sent password reset email to " + recipientAddress);
+		      setStatustoClient(index, "Sent email");
+		  }
+	      });
 }
 
 function generateEmailToken(email) {
@@ -423,6 +448,12 @@ datastorage.initialize("pending", { pending : [] });
 datastorage.initialize("calendar", { year : "2016", season : [] });
 datastorage.initialize("reservations", { reservations : [] });
 datastorage.initialize("rentables", { rentables : [] });
+datastorage.initialize("email", { host : "smtp.your-email.com",
+				  user : "username",
+				  password : "password",
+				  sender : "you <username@your-email.com>",
+				  ssl : true,
+				  blindlyTrust : true });
 
 webServer.listen(8080, function() {
     servicelog("Waiting for client connection to port 8080...");
