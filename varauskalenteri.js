@@ -30,28 +30,20 @@ function sendCipherTextToClient(index, sendable) {
     globalConnectionList[index].connection.send(JSON.stringify(cipherSendable));
 }
 
-function serveClientPage() {
-    http.createServer(function(request,response){
-	var clientjs = fs.readFileSync("./client.js", "utf8");
-	var aesjs = fs.readFileSync("./crypto/aes.js", "utf8");
-	var aesctrjs = fs.readFileSync("./crypto/aes-ctr.js", "utf8");
-	var sha1js = fs.readFileSync("./crypto/sha1.js", "utf8");
-	var sendable = clientjs + aesjs + aesctrjs + sha1js + "</script></body></html>";
-	response.writeHeader(200, {"Content-Type": "text/html"});
-	response.write(sendable);
-	response.end();
-    }).listen(8080);
-}
-
-var server = http.createServer(function(request, response) {
-    // process HTTP request. Since we're writing just WebSockets server
-    // we don't have to implement anything.
+var webServer = http.createServer(function(request,response){
+    var clientjs = fs.readFileSync("./client.js", "utf8");
+    var aesjs = fs.readFileSync("./crypto/aes.js", "utf8");
+    var aesctrjs = fs.readFileSync("./crypto/aes-ctr.js", "utf8");
+    var sha1js = fs.readFileSync("./crypto/sha1.js", "utf8");
+    var sendable = clientjs + aesjs + aesctrjs + sha1js + "</script></body></html>";
+    response.writeHeader(200, {"Content-Type": "text/html"});
+    response.write(sendable);
+    response.end();
 });
 
-server.listen(8081, function() {});
-
 wsServer = new websocket.server({
-    httpServer: server
+    httpServer: webServer,
+    autoAcceptConnections: false
 });
 
 wsServer.on('request', function(request) {
@@ -425,8 +417,6 @@ function getReservationsForDay(day, user) {
     return { state: "both_reserved" };
 }
 
-servicelog("Waiting for client connection to port 8080...");
-
 // datastorage.setLogger(servicelog);
 datastorage.initialize("users", { users : [] });
 datastorage.initialize("pending", { pending : [] });
@@ -434,4 +424,6 @@ datastorage.initialize("calendar", { year : "2016", season : [] });
 datastorage.initialize("reservations", { reservations : [] });
 datastorage.initialize("rentables", { rentables : [] });
 
-serveClientPage();
+webServer.listen(8080, function() {
+    servicelog("Waiting for client connection to port 8080...");
+});

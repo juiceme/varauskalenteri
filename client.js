@@ -18,7 +18,7 @@
 <script language="javascript" type="text/javascript">
 
 var site = window.location.hostname;
-var mySocket = new WebSocket("ws://" + site + ":8081/");
+var mySocket = new WebSocket("ws://" + site + ":8080/");
 var sessionPassword;
 
 mySocket.onopen = function (event) {
