@@ -191,7 +191,7 @@ function processCreateAccount(index, content) {
 
 function processConfirmEmail(index, content) {
     servicelog("Request for email verification: [" + content + "]");
-    sendEmailVerification(index, content);
+    sendVerificationEmail(index, content);
     processClientStarted(index);
     setStatustoClient(index, "Email sent!");
 }
@@ -252,6 +252,38 @@ function processSendReservation(index, content) {
     sendable = {type: "calendarData",
 		content: createCalendarSendable(globalConnectionList[index].user.username) };
     sendCipherTextToClient(index, sendable);
+    var reservationTotals = calculateReservationTotals(reservation);
+    sendReservationEmail(index, reservationTotals);
+}
+
+function getDayType(day) {
+    var calendarData = datastorage.read("calendar");
+    var targetDay;
+    calendarData.season.forEach(function(w) {
+	w.days.forEach(function(d) {
+	    if (d.date === day) { targetDay = d; }
+	});
+    });
+    return targetDay;
+}
+
+function calculateReservationTotals(reservation) {
+    if(reservation.reservation.length === 0) {
+	return false;
+    }
+    var weekDays = reservation.reservation
+	.filter(function(d) { return getDayType(d).type === "weekday"; }).length;
+    var weekendDays = reservation.reservation
+	.filter(function(d) { return getDayType(d).type === "weekend"; }).length;
+    var discount = 0;
+    if(((weekDays + weekendDays) > 7) && (weekendDays > 1)) { discount = 100; }
+    if(((weekDays + weekendDays) > 14) && (weekendDays > 3)) { discount = 200; }
+    if(((weekDays + weekendDays) > 21) && (weekendDays > 5)) { discount = 300; }
+    if(((weekDays + weekendDays) > 28) && (weekendDays > 7)) { discount = 400; }
+    var totalPrice = (weekDays * 75) + (weekendDays * 150);
+    return "     Days: " + JSON.stringify(reservation.reservation) + "\r\n" +
+    "     Reservation for " + weekDays + "+" + weekendDays + " days: " + (totalPrice - discount) +
+	" euros, including discount of " + discount + " euros.";
 }
 
 function readUserData() {
@@ -348,7 +380,7 @@ function validateAccountCode(code) {
     }
 }
 
-function sendEmailVerification(index, recipientAddress) {
+function sendVerificationEmail(index, recipientAddress) {
     var userData = datastorage.read("pending");
     var request = { email: recipientAddress,
 		    token: generateEmailToken(recipientAddress),
@@ -380,6 +412,41 @@ function sendEmailVerification(index, recipientAddress) {
 		      setStatustoClient(index, "Failed sending email!");
 		  } else {
 		      servicelog("Sent password reset email to " + recipientAddress);
+		      setStatustoClient(index, "Sent email");
+		  }
+	      });
+}
+
+function sendReservationEmail(index, reservationTotals) {
+    var recipientAddress = globalConnectionList[index].user.email;
+    var emailData = datastorage.read("email");
+    if(reservationTotals === false) {
+	var emailBody = "You have cancelled all pending reservations to Varauskalenteri.\r\n\r\n" +
+	    "   -Administrator-\r\n";
+    } else {
+	var emailBody = "You have made following reservation to Varauskalenteri.\r\n\r\n" +
+	    reservationTotals + "\r\n\r\n" +
+	    "The administrator will contact you soon to confirm the reservation.\r\n\r\n" +
+	    "   -Administrator-\r\n";
+    }
+    if(emailData.blindlyTrust) {
+	servicelog("Trusting self-signed certificates");
+	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    }
+    email.server.connect({
+	user: emailData.user,
+	password: emailData.password,
+	host: emailData.host,
+	ssl: emailData.ssl
+    }).send({ text: emailBody,
+	      from: emailData.sender,
+	      to: recipientAddress,
+	      subject: "Your new reservation to Varauskalenteri" }, function(err, message) {
+		  if(err) {
+		      servicelog(err + " : " + JSON.stringify(message));
+		      setStatustoClient(index, "Failed sending email!");
+		  } else {
+		      servicelog("Sent reservation confirm email to " + recipientAddress);
 		      setStatustoClient(index, "Sent email");
 		  }
 	      });
