@@ -515,6 +515,7 @@ datastorage.initialize("pending", { pending : [] });
 datastorage.initialize("calendar", { year : "2016", season : [] });
 datastorage.initialize("reservations", { reservations : [] });
 datastorage.initialize("rentables", { rentables : [] });
+datastorage.initialize("language", { language : [ "finnish" , "english" ], substitution : [] });
 datastorage.initialize("email", { host : "smtp.your-email.com",
 				  user : "username",
 				  password : "password",
