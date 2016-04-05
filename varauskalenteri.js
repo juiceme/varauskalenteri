@@ -383,19 +383,27 @@ function validateAccountCode(code) {
 }
 
 function sendVerificationEmail(index, recipientAddress) {
-    var userData = datastorage.read("pending");
+    var pendingData = datastorage.read("pending");
+    var emailData = datastorage.read("email");
     var request = { email: recipientAddress,
 		    token: generateEmailToken(recipientAddress),
 		    date: new Date().getTime() };
-    userData.pending.push(request);
-    if(datastorage.write("pending", userData) === false) {
+    pendingData.pending.push(request);
+    if(datastorage.write("pending", pendingData) === false) {
 	servicelog("Pending database write failed");
     }
-    var emailData = datastorage.read("email");
-    var emailBody = "You have requested a new account or password reset of Varauskalenteri.\r\n\r\n" +
-	"Copy the following code to the \"validation code\" field and push \"Validate Account!\" button\r\n" +
-	"Your validation code: " + request.token.mail +  request.token.key + "\r\n\r\n" +
-	"   -Administrator-\r\n";
+    if(getUserByEmail(recipientAddress).length === 0) {
+	var emailSubject = "Your new account for Varauskalenteri";
+	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+						       "NEW_ACCOUNT_GREETING"),
+				       (request.token.mail + request.token.key));
+    } else {
+	var emailSubject = "Your new password for Varauskalenteri";
+	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+						       "PASSWORD_RESET_GREETING"),
+				       getUserByEmail(recipientAddress)[0].username,
+				       (request.token.mail + request.token.key));
+    }
     if(emailData.blindlyTrust) {
 	servicelog("Trusting self-signed certificates");
 	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -408,7 +416,7 @@ function sendVerificationEmail(index, recipientAddress) {
     }).send({ text: emailBody,
 	      from: emailData.sender,
 	      to: recipientAddress,
-	      subject: "Your password for Varauskalenteri" }, function(err, message) {
+	      subject: emailSubject }, function(err, message) {
 		  if(err) {
 		      servicelog(err + " : " + JSON.stringify(message));
 		      setStatustoClient(index, "Failed sending email!");
@@ -423,13 +431,16 @@ function sendReservationEmail(index, reservationTotals) {
     var recipientAddress = globalConnectionList[index].user.email;
     var emailData = datastorage.read("email");
     if(reservationTotals === false) {
-	var emailBody = "You have cancelled all pending reservations to Varauskalenteri.\r\n\r\n" +
-	    "   -Administrator-\r\n";
+	var emailSubject = "You have cancelled your reservation to Varauskalenteri";
+	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+						       "RESERVATION_CANCEL_GREETING"),
+				       getUserByEmail(recipientAddress)[0].username);
     } else {
-	var emailBody = "You have made following reservation to Varauskalenteri.\r\n\r\n" +
-	    reservationTotals + "\r\n\r\n" +
-	    "The administrator will contact you soon to confirm the reservation.\r\n\r\n" +
-	    "   -Administrator-\r\n";
+	var emailSubject = "You have a new/modified reservation to Varauskalenteri";
+	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+						       "RESERVATION_CONFIRM_GREETING"),
+				       getUserByEmail(recipientAddress)[0].username,
+				       reservationTotals);
     }
     if(emailData.blindlyTrust) {
 	servicelog("Trusting self-signed certificates");
@@ -443,7 +454,7 @@ function sendReservationEmail(index, reservationTotals) {
     }).send({ text: emailBody,
 	      from: emailData.sender,
 	      to: recipientAddress,
-	      subject: "Your new reservation to Varauskalenteri" }, function(err, message) {
+	      subject: emailSubject }, function(err, message) {
 		  if(err) {
 		      servicelog(err + " : " + JSON.stringify(message));
 		      setStatustoClient(index, "Failed sending email!");
@@ -509,6 +520,22 @@ function getReservationsForDay(day, user) {
     if(ownReservation === 0) return { state: "other_reserved" };
     if(otherReservation === 0) return { state: "own_reserved" };
     return { state: "both_reserved" };
+}
+
+function getLanguageText(language, tag) {
+    var langData = datastorage.read("language");
+    var langIndex = langData.language.indexOf(language);
+    if(++langIndex === 0) { return false; }
+    if(langData.substitution.filter(function(f) { return f.tag === tag }).length === 0) { return false; }
+    return langData.substitution.filter(function(f) { return f.tag === tag })[0]["LANG" + langIndex];
+}
+
+function fillTagsInText(text) {
+    for(var i = 1; i < arguments.length; i++) {
+	var substituteString = "_SUBSTITUTE_TEXT_" + i + "_";
+	text = text.replace(substituteString, arguments[i]);
+    }
+    return text;
 }
 
 // datastorage.setLogger(servicelog);
