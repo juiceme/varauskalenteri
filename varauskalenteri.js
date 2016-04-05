@@ -510,10 +510,10 @@ function getReservationsForDay(day, user) {
 }
 
 // datastorage.setLogger(servicelog);
-datastorage.initialize("users", { users : [] });
-datastorage.initialize("pending", { pending : [] });
+datastorage.initialize("users", { users : [] }, true);
+datastorage.initialize("pending", { pending : [] }, true);
 datastorage.initialize("calendar", { year : "2016", season : [] });
-datastorage.initialize("reservations", { reservations : [] });
+datastorage.initialize("reservations", { reservations : [] }, true);
 datastorage.initialize("rentables", { rentables : [] });
 datastorage.initialize("language", { language : [ "finnish" , "english" ], substitution : [] });
 datastorage.initialize("email", { host : "smtp.your-email.com",
