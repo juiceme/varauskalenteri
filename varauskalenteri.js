@@ -32,11 +32,13 @@ function sendCipherTextToClient(index, sendable) {
 }
 
 var webServer = http.createServer(function(request,response){
-    var clientjs = fs.readFileSync("./client.js", "utf8");
+    var clienthead = fs.readFileSync("./clienthead", "utf8");
+    var variables = "var WEBSOCK_PORT = " + mainConfig.main.port + "\n\n";
+    var clientbody = fs.readFileSync("./clientbody.js", "utf8");
     var aesjs = fs.readFileSync("./crypto/aes.js", "utf8");
     var aesctrjs = fs.readFileSync("./crypto/aes-ctr.js", "utf8");
     var sha1js = fs.readFileSync("./crypto/sha1.js", "utf8");
-    var sendable = clientjs + aesjs + aesctrjs + sha1js + "</script></body></html>";
+    var sendable = clienthead + variables + clientbody + aesjs + aesctrjs + sha1js + "</script></body></html>";
     response.writeHeader(200, {"Content-Type": "text/html"});
     response.write(sendable);
     response.end();
@@ -510,6 +512,7 @@ function getReservationsForDay(day, user) {
 }
 
 // datastorage.setLogger(servicelog);
+datastorage.initialize("main", { main : { port:8080, language:"english" } });
 datastorage.initialize("users", { users : [] }, true);
 datastorage.initialize("pending", { pending : [] }, true);
 datastorage.initialize("calendar", { year : "2016", season : [] });
@@ -523,6 +526,8 @@ datastorage.initialize("email", { host : "smtp.your-email.com",
 				  ssl : true,
 				  blindlyTrust : true });
 
-webServer.listen(8080, function() {
-    servicelog("Waiting for client connection to port 8080...");
+var mainConfig = datastorage.read("main");
+
+webServer.listen(mainConfig.main.port, function() {
+    servicelog("Waiting for client connection to port " + mainConfig.main.port + "...");
 });

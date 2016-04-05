@@ -1,24 +1,5 @@
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-    table, th, td { border:1px solid black; border-collapse: collapse; }
-    th, td { padding: 10px; }
-</style>
-</head>
-<body>
-<form> status: <input type="text" id="myStatusField" value="" disabled></form>
-<br>
-<div id= "myLogoutButton"> </div>
-<br><br>
-<div id= "myDiv1"> </div>
-<br><br>
-<div id = "myConfirmButton"> </div>
-
-<script language="javascript" type="text/javascript">
-
 var site = window.location.hostname;
-var mySocket = new WebSocket("ws://" + site + ":8080/");
+var mySocket = new WebSocket("ws://" + site + ":" + WEBSOCK_PORT + "/");
 var sessionPassword;
 
 mySocket.onopen = function (event) {
