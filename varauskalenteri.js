@@ -393,12 +393,12 @@ function sendVerificationEmail(index, recipientAddress) {
 	servicelog("Pending database write failed");
     }
     if(getUserByEmail(recipientAddress).length === 0) {
-	var emailSubject = "Your new account for Varauskalenteri";
+	var emailSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "NEW_ACCOUNT_GREETING"),
 				       (request.token.mail + request.token.key));
     } else {
-	var emailSubject = "Your new password for Varauskalenteri";
+	var emailSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "PASSWORD_RESET_GREETING"),
 				       getUserByEmail(recipientAddress)[0].username,
@@ -431,12 +431,12 @@ function sendReservationEmail(index, reservationTotals) {
     var recipientAddress = globalConnectionList[index].user.email;
     var emailData = datastorage.read("email");
     if(reservationTotals === false) {
-	var emailSubject = "You have cancelled your reservation to Varauskalenteri";
+	var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "RESERVATION_CANCEL_GREETING"),
 				       getUserByEmail(recipientAddress)[0].username);
     } else {
-	var emailSubject = "You have a new/modified reservation to Varauskalenteri";
+	var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CONFIRM_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "RESERVATION_CONFIRM_GREETING"),
 				       getUserByEmail(recipientAddress)[0].username,
