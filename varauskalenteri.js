@@ -82,8 +82,10 @@ wsServer.on('request', function(request) {
 	       stateIs(index, "clientStarted")) { processConfirmEmail(index, content); }
 	    if((type === "validateAccount") &&
 	       stateIs(index, "clientStarted")) { processValidateAccount(index, content); }
-	    if((type ==="sendReservation") &&
+	    if((type === "sendReservation") &&
 	       stateIs(index, "loggedIn")) { processSendReservation(index, content); }
+	    if((type === "adminRequest") &&
+	       stateIs(index, "loggedIn")) { processSendAdminView(index, content); }
 	}
     });
 
@@ -145,9 +147,13 @@ function processLoginResponse(index, content) {
 	servicelog("User login OK");
 	setState(index, "loggedIn");
 	setStatustoClient(index, "Login OK");
-        sendable = {type: "calendarData",
-		    content: createCalendarSendable(globalConnectionList[index].user.username) };
+        sendable = { type: "calendarData",
+		     content: createCalendarSendable(globalConnectionList[index].user.username) };
 	sendCipherTextToClient(index, sendable);
+	if(isUserAdministrator(globalConnectionList[index].user)) {
+	    sendable = { type: "enableAdminButton", content:"none" };
+	    sendCipherTextToClient(index, sendable);
+	}
     } else {
 	servicelog("User login failed");
 	processClientStarted(index);
@@ -263,11 +269,30 @@ function processSendReservation(index, content) {
 	servicelog("Updated reservation database: " + JSON.stringify(reservationData));
     }
     setStatustoClient(index, "Reservation sent");
-    sendable = {type: "calendarData",
-		content: createCalendarSendable(globalConnectionList[index].user.username) };
+    sendable = { type: "calendarData",
+		 content: createCalendarSendable(globalConnectionList[index].user.username) };
     sendCipherTextToClient(index, sendable);
     var reservationTotals = calculateReservationTotals(reservation);
     sendReservationEmail(index, reservationTotals);
+}
+
+function processSendAdminView(index, content) {
+    if(!isUserAdministrator(globalConnectionList[index].user)) {
+	servicelog("User " + globalConnectionList[index].user.username + " is not an administrator");
+	processClientStarted(index);
+	setStatustoClient(index, "Admin validation failed!");
+	return;
+    } else {
+	setStatustoClient(index, "Admin validation OK!");
+	var reservationData = datastorage.read("reservations");
+	var sendable = { type: "adminView",
+			 content: reservationData.reservations };
+	sendCipherTextToClient(index, sendable);
+    }
+}
+
+function isUserAdministrator(user) {
+    return user.priviliges === "administrator";
 }
 
 function getDayType(day) {

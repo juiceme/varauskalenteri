@@ -38,6 +38,17 @@ mySocket.onmessage = function (event) {
 	document.body.replaceChild(createCheckReservationButton(),
 				   document.getElementById("myConfirmButton"));
     }
+
+    if(receivable.type == "enableAdminButton") {
+	document.body.replaceChild(createAdminButton(),
+				   document.getElementById("myAdminButton"));
+    }
+
+    if(receivable.type == "adminView") {
+	var reservationData = receivable.content;
+	document.body.replaceChild(createAdminView(reservationData),
+				   document.getElementById("myDiv1"));
+    }
 }
 
 function createLoginView() {
@@ -447,8 +458,19 @@ function sendValidationCode(code) {
     sendToServer("validateAccount", sendable);
 }
 
+function createAdminView(reservationData) {
+    var clearText = JSON.parse(Aes.Ctr.decrypt(reservationData, sessionPassword, 128));
+    clearText.forEach(function(f) {
+	console.log(JSON.stringify(f));
+    });
+    div1 = document.createElement("div");
+    div1.id = "myDiv1";
+  
+    return div1;
+}
+
 function createCalendarView(calendarData) {
-    clearText = JSON.parse(Aes.Ctr.decrypt(calendarData, sessionPassword, 128));
+    var clearText = JSON.parse(Aes.Ctr.decrypt(calendarData, sessionPassword, 128));
     var table = document.createElement('table');
     var tableHeader = document.createElement('thead');
     tableHeader.appendChild(createHeader(clearText.year));
@@ -476,6 +498,15 @@ function createLogoutButton() {
     return button;
 }
 
+function createAdminButton() {
+    var button = document.createElement("button");  
+    button.onclick = function() { sendToServer("adminRequest", "none"); }
+    var text = document.createTextNode("Administration");
+    button.appendChild(text);
+    button.id = "myAdminButton";
+    return button;
+}
+
 function logout() {
     div1 = document.createElement("div");
     document.body.replaceChild(div1, document.getElementById("myLogoutButton"));
@@ -486,6 +517,9 @@ function logout() {
     div3 = document.createElement("div");
     document.body.replaceChild(div3, document.getElementById("myConfirmButton"));
     div3.id = "myConfirmButton";
+    div4 = document.createElement("div");
+    document.body.replaceChild(div4, document.getElementById("myAdminButton"));
+    div4.id = "myAdminButton";
 
     var sendable = {type:"clientStarted", content:"none"};
     mySocket.send(JSON.stringify(sendable));
