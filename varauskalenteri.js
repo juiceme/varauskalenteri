@@ -158,10 +158,22 @@ function processCreateAccount(index, content) {
     var sendable;
     servicelog("temp passwd: " + JSON.stringify(globalConnectionList[index].aesKey));
     var account = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
+
+    if(typeof(account) !== "object") {
+	servicelog("Received illegal account creation data");
+	return false;
+    }
+    if(account["username"] === undefined) {
+	servicelog("Received account creation data without username");
+	return false;
+    }
+
     if(stateIs(index, "newUserValidated")) {
 	servicelog("Request for new user: [" + account.username + "]");
 	if(!createAccount(account)) {
-	    servicelog("Account [" + account.username + "] already exists!");
+	    servicelog("Cannot create account " + account.username);
+	    // there are more possible reasons than already existing account, however user needs
+	    // not know about that, hence display only "Account already exists!" in client...
 	    setStatustoClient(index, "Account already exists!");
 	    sendable = { type: "createNewAccount" };
 	    sendPlainTextToClient(index, sendable);
@@ -338,15 +350,25 @@ function getUserByHashedName(hash) {
 }
 
 function createAccount(account) {
+    if(account["password"] === undefined) {
+	servicelog("Received account creation data without password");
+	return false;
+    }
     var userData = readUserData();
-
     if(userData.users.filter(function(u) {
 	return u.username === account.username;
     }).length !== 0) {
+	servicelog("Cannot create an existing user account");
 	return false;
     } else {
-	account.hash = sha1.hash(account.username);
-	userData.users.push(account);
+	var newAccount = { username: account.username,
+			   hash: sha1.hash(account.username),
+			   password: account.password,
+			   priviliges:"user" };
+	if(account["realname"] !== undefined) { newAccount.realname = account.realname; }
+	if(account["email"] !== undefined) { newAccount.email = account.email; }
+	if(account["phone"] !== undefined) { newAccount.phone = account.phone; }
+	userData.users.push(newAccount);
 	if(datastorage.write("users", userData) === false) {
 	    servicelog("User database write failed");
 	    return false;
