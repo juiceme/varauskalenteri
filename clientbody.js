@@ -392,7 +392,7 @@ function sendLogin(username, password) {
     div = document.createElement('div');
     div.id = "myDiv1";
     document.body.replaceChild(div, document.getElementById("myDiv1"));
-    sessionPassword = Sha1.hash(password);
+    sessionPassword = Sha1.hash(password + Sha1.hash(username).slice(0,4));
     sendToServer("userLogin", { username: Sha1.hash(username) });
 }
 
@@ -434,7 +434,7 @@ function sendConfirmAccount(account) {
 		     realname: account.realname,
 		     email: account.email,
 		     phone: account.phone,
-		     password: Sha1.hash(account.passwd1) }; 
+		     password: Sha1.hash(account.passwd1 + Sha1.hash(account.username).slice(0,4)) }; 
     document.getElementById("myStatusField").value = "Account query sent";
     div = document.createElement('div');
     div.id = "myDiv1";
