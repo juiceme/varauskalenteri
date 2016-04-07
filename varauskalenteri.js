@@ -7,28 +7,27 @@ Aes.Ctr = require('./crypto/aes-ctr.js');
 var sha1 = require('./crypto/sha1.js');
 var datastorage = require('./datastorage/datastorage.js');
 
-var globalConnectionList = [];
 var globalSalt = sha1.hash(JSON.stringify(new Date().getTime()));
 
 function servicelog(s) {
     console.log((new Date()) + " --- " + s);
 }
 
-function setStatustoClient(index, status) {
+function setStatustoClient(cookie, status) {
     var sendable = { type: "statusData",
 		     content: status };
-    globalConnectionList[index].connection.send(JSON.stringify(sendable));
+    cookie.connection.send(JSON.stringify(sendable));
 }
 
-function sendPlainTextToClient(index, sendable) {
-    globalConnectionList[index].connection.send(JSON.stringify(sendable));
+function sendPlainTextToClient(cookie, sendable) {
+    cookie.connection.send(JSON.stringify(sendable));
 }
 
-function sendCipherTextToClient(index, sendable) {
+function sendCipherTextToClient(cookie, sendable) {
     var cipherSendable = { type: sendable.type,
 			   content: Aes.Ctr.encrypt(JSON.stringify(sendable.content),
-						    globalConnectionList[index].aesKey, 128) };
-    globalConnectionList[index].connection.send(JSON.stringify(cipherSendable));
+						    cookie.aesKey, 128) };
+    cookie.connection.send(JSON.stringify(cipherSendable));
 }
 
 var webServer = http.createServer(function(request,response){
@@ -49,13 +48,14 @@ wsServer = new websocket.server({
     autoAcceptConnections: false
 });
 
+var connectionCount = 0;
+
 wsServer.on('request', function(request) {
     servicelog("Connection from origin " + request.origin);
     var connection = request.accept(null, request.origin);
-    var index = globalConnectionList.push({ connection: connection,
-					    state : "new" }) - 1;
+    var cookie = { count:connectionCount++, connection:connection, state:"new" };
     var sendable;
-    servicelog("Client #" + index + " accepted");
+    servicelog("Client #" + cookie.count  + " accepted");
 
     connection.on('message', function(message) {
         if (message.type === 'utf8') {
@@ -74,96 +74,96 @@ wsServer.on('request', function(request) {
 	    var type = receivable.type;
 	    var content = receivable.content;
 
-            if(type === "clientStarted") { processClientStarted(index); }
-	    if(type === "userLogin") { processUserLogin(index, content); }
-	    if(type === "loginResponse") { processLoginResponse(index, content); }
-	    if(type === "createAccount") { processCreateAccount(index, content); }
+            if(type === "clientStarted") { processClientStarted(cookie); }
+	    if(type === "userLogin") { processUserLogin(cookie, content); }
+	    if(type === "loginResponse") { processLoginResponse(cookie, content); }
+	    if(type === "createAccount") { processCreateAccount(cookie, content); }
 	    if((type === "confirmEmail") &&
-	       stateIs(index, "clientStarted")) { processConfirmEmail(index, content); }
+	       stateIs(cookie, "clientStarted")) { processConfirmEmail(cookie, content); }
 	    if((type === "validateAccount") &&
-	       stateIs(index, "clientStarted")) { processValidateAccount(index, content); }
+	       stateIs(cookie, "clientStarted")) { processValidateAccount(cookie, content); }
 	    if((type === "sendReservation") &&
-	       stateIs(index, "loggedIn")) { processSendReservation(index, content); }
+	       stateIs(cookie, "loggedIn")) { processSendReservation(cookie, content); }
 	    if((type === "adminRequest") &&
-	       stateIs(index, "loggedIn")) { processSendAdminView(index, content); }
+	       stateIs(cookie, "loggedIn")) { processSendAdminView(cookie, content); }
 	}
     });
 
     connection.on('close', function(connection) {
-        servicelog("client #" + index + " disconnected");
-        globalConnectionList.splice(index, 1);
+	servicelog("Client #" + cookie.count  + " disconnected");
+        cookie = {};
     });
 });
 
-function stateIs(index, state) {
-    return (globalConnectionList[index].state === state);
+function stateIs(cookie, state) {
+    return (cookie.state === state);
 }
 
-function setState(index, state) {
-    globalConnectionList[index].state = state;
+function setState(cookie, state) {
+    cookie.state = state;
 }
 
-function processClientStarted(index) {
-    servicelog("Sending initial login view to client #" + index);
-    setState(index, "clientStarted");
-    globalConnectionList[index].aesKey = "";
-    globalConnectionList[index].user = {};
-    globalConnectionList[index].challenge = "";
+function processClientStarted(cookie) {
+    servicelog("Sending initial login view to client #" + cookie.count);
+    setState(cookie, "clientStarted");
+    cookie.aesKey = "";
+    cookie.user = {};
+    cookie.challenge = "";
     var sendable = { type: "loginView" }
-    sendPlainTextToClient(index, sendable);
-    setStatustoClient(index, "Login");
+    sendPlainTextToClient(cookie, sendable);
+    setStatustoClient(cookie, "Login");
 }
 
-function processUserLogin(index, content) {
+function processUserLogin(cookie, content) {
     var sendable;
     if(!content.username) {
 	servicelog("Illegal user login message");
-	processClientStarted(index);
+	processClientStarted(cookie);
 	return;
     } else {
 	var user = getUserByHashedName(content.username);
 	if(user.length === 0) {
 	    servicelog("Unknown user login attempt");
-	    processClientStarted(index);
+	    processClientStarted(cookie);
 	    return;
 	} else {
-	    globalConnectionList[index].user = user[0];
-	    globalConnectionList[index].aesKey = user[0].password;
+	    cookie.user = user[0];
+	    cookie.aesKey = user[0].password;
 	    servicelog("User " + user[0].username + " logging in");
 	    var plainChallenge = getNewChallenge();
 	    servicelog("plainChallenge:   " + plainChallenge);
-	    globalConnectionList[index].challenge = JSON.stringify(plainChallenge);
+	    cookie.challenge = JSON.stringify(plainChallenge);
 	    sendable = { type: "loginChallenge",
 			 content: plainChallenge };
-	    sendCipherTextToClient(index, sendable);
+	    sendCipherTextToClient(cookie, sendable);
 	}
     }
 }
 
-function processLoginResponse(index, content) {
+function processLoginResponse(cookie, content) {
     var sendable;
-    var plainResponse = Aes.Ctr.decrypt(content, globalConnectionList[index].user.password, 128);
-    if(globalConnectionList[index].challenge === plainResponse) {
+    var plainResponse = Aes.Ctr.decrypt(content, cookie.user.password, 128);
+    if(cookie.challenge === plainResponse) {
 	servicelog("User login OK");
-	setState(index, "loggedIn");
-	setStatustoClient(index, "Login OK");
+	setState(cookie, "loggedIn");
+	setStatustoClient(cookie, "Login OK");
         sendable = { type: "calendarData",
-		     content: createCalendarSendable(globalConnectionList[index].user.username) };
-	sendCipherTextToClient(index, sendable);
-	if(isUserAdministrator(globalConnectionList[index].user)) {
+		     content: createCalendarSendable(cookie.user.username) };
+	sendCipherTextToClient(cookie, sendable);
+	if(isUserAdministrator(cookie.user)) {
 	    sendable = { type: "enableAdminButton", content:"none" };
-	    sendCipherTextToClient(index, sendable);
+	    sendCipherTextToClient(cookie, sendable);
 	}
     } else {
 	servicelog("User login failed");
-	processClientStarted(index);
+	processClientStarted(cookie);
     }
 }
 
-function processCreateAccount(index, content) {
+function processCreateAccount(cookie, content) {
     var sendable;
-    servicelog("temp passwd: " + JSON.stringify(globalConnectionList[index].aesKey));
-    var account = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
+    servicelog("temp passwd: " + JSON.stringify(cookie.aesKey));
+    var account = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
 
     if(typeof(account) !== "object") {
 	servicelog("Received illegal account creation data");
@@ -174,61 +174,61 @@ function processCreateAccount(index, content) {
 	return false;
     }
 
-    if(stateIs(index, "newUserValidated")) {
+    if(stateIs(cookie, "newUserValidated")) {
 	servicelog("Request for new user: [" + account.username + "]");
 	if(!createAccount(account)) {
 	    servicelog("Cannot create account " + account.username);
 	    // there are more possible reasons than already existing account, however user needs
 	    // not know about that, hence display only "Account already exists!" in client...
-	    setStatustoClient(index, "Account already exists!");
+	    setStatustoClient(cookie, "Account already exists!");
 	    sendable = { type: "createNewAccount" };
-	    sendPlainTextToClient(index, sendable);
+	    sendPlainTextToClient(cookie, sendable);
 	    return;
 	} else {
-	    processClientStarted(index);
-	    setStatustoClient(index, "Account created!");
+	    processClientStarted(cookie);
+	    setStatustoClient(cookie, "Account created!");
 	    return;
 	}
     }
-    if(stateIs(index, "oldUserValidated")) {
+    if(stateIs(cookie, "oldUserValidated")) {
 	servicelog("Request account change for user: [" + account.username + "]");
 	var user = getUserByUserName(account.username);
 	if(user.length === 0) {
-	    processClientStarted(index);
-	    setStatustoClient(index, "Illegal user operation!");
+	    processClientStarted(cookie);
+	    setStatustoClient(cookie, "Illegal user operation!");
 	    return;
 	} else {
-	    processClientStarted(index);
+	    processClientStarted(cookie);
 	    if(updateUserAccount(account)) {
-		setStatustoClient(index, "Account updated!");
+		setStatustoClient(cookie, "Account updated!");
 	    } else {
-		setStatustoClient(index, "Account update failed!");
+		setStatustoClient(cookie, "Account update failed!");
 	    }
 	    return;
 	}
     }
 }
 
-function processConfirmEmail(index, content) {
+function processConfirmEmail(cookie, content) {
     servicelog("Request for email verification: [" + content + "]");
-    sendVerificationEmail(index, content);
-    processClientStarted(index);
-    setStatustoClient(index, "Email sent!");
+    sendVerificationEmail(cookie, content);
+    processClientStarted(cookie);
+    setStatustoClient(cookie, "Email sent!");
 }
 
-function processValidateAccount(index, content) {
+function processValidateAccount(cookie, content) {
     if(!content.email || !content.challenge) {
 	servicelog("Illegal validate account message");
-	processClientStarted(index);
+	processClientStarted(cookie);
 	return;
     } else {
 	servicelog("Validation code: " + JSON.stringify(content));
 	account = validateAccountCode(content.email.toString());
 	if((account !== false) && (Aes.Ctr.decrypt(content.challenge, account.token.key, 128)
 				   === "clientValidating")) {
-	    setState(index, "newUserValidated");
-	    setStatustoClient(index, "Validation code correct!");
-	    globalConnectionList[index].aesKey = account.token.key;
+	    setState(cookie, "newUserValidated");
+	    setStatustoClient(cookie, "Validation code correct!");
+	    cookie.aesKey = account.token.key;
 	    var newAccount = {email: account.email};
 	    newAccount.buttonText = "Create Account!";
 	    var user = getUserByEmail(account.email);
@@ -237,29 +237,29 @@ function processValidateAccount(index, content) {
 		newAccount.realname = user[0].realname;
 		newAccount.phone = user[0].phone;
 		newAccount.buttonText = "Save Account!"
-		setState(index, "oldUserValidated");
+		setState(cookie, "oldUserValidated");
 	    }
 	    sendable = { type: "createNewAccount",
 			 content: newAccount };
-	    sendCipherTextToClient(index, sendable);
+	    sendCipherTextToClient(cookie, sendable);
 	    return;
 	} else {
-	    processClientStarted(index);
-	    setStatustoClient(index, "Validation code failed!");
+	    processClientStarted(cookie);
+	    setStatustoClient(cookie, "Validation code failed!");
 	    return;
 	}
     }
 }
 
-function processSendReservation(index, content) {
-    var reservation = JSON.parse(Aes.Ctr.decrypt(content, globalConnectionList[index].aesKey, 128));
+function processSendReservation(cookie, content) {
+    var reservation = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
     servicelog("received reservation: " + JSON.stringify(reservation));
     var reservationData = datastorage.read("reservations");
     var newReservations = reservationData.reservations.filter(function(r) {
-	return ((r.user !== globalConnectionList[index].user.username) || (r.state === "reserved"));
+	return ((r.user !== cookie.user.username) || (r.state === "reserved"));
     });
     if(reservation.reservation.length !== 0) {
-	newReservations.push({ user: globalConnectionList[index].user.username,
+	newReservations.push({ user: cookie.user.username,
 			       reservation: reservation.reservation,
 			       state: "pending" });
     }
@@ -268,26 +268,26 @@ function processSendReservation(index, content) {
     } else {
 	servicelog("Updated reservation database: " + JSON.stringify(reservationData));
     }
-    setStatustoClient(index, "Reservation sent");
+    setStatustoClient(cookie, "Reservation sent");
     sendable = { type: "calendarData",
-		 content: createCalendarSendable(globalConnectionList[index].user.username) };
-    sendCipherTextToClient(index, sendable);
+		 content: createCalendarSendable(cookie.user.username) };
+    sendCipherTextToClient(cookie, sendable);
     var reservationTotals = calculateReservationTotals(reservation);
-    sendReservationEmail(index, reservationTotals);
+    sendReservationEmail(cookie, reservationTotals);
 }
 
-function processSendAdminView(index, content) {
-    if(!isUserAdministrator(globalConnectionList[index].user)) {
-	servicelog("User " + globalConnectionList[index].user.username + " is not an administrator");
-	processClientStarted(index);
-	setStatustoClient(index, "Admin validation failed!");
+function processSendAdminView(cookie, content) {
+    if(!isUserAdministrator(cookie.user)) {
+	servicelog("User " + cookie.user.username + " is not an administrator");
+	processClientStarted(cookie);
+	setStatustoClient(cookie, "Admin validation failed!");
 	return;
     } else {
-	setStatustoClient(index, "Admin validation OK!");
+	setStatustoClient(cookie, "Admin validation OK!");
 	var reservationData = datastorage.read("reservations");
 	var sendable = { type: "adminView",
 			 content: reservationData.reservations };
-	sendCipherTextToClient(index, sendable);
+	sendCipherTextToClient(cookie, sendable);
     }
 }
 
@@ -433,7 +433,7 @@ function validateAccountCode(code) {
     }
 }
 
-function sendVerificationEmail(index, recipientAddress) {
+function sendVerificationEmail(cookie, recipientAddress) {
     var pendingData = datastorage.read("pending");
     var emailData = datastorage.read("email");
     var request = { email: recipientAddress,
@@ -470,16 +470,16 @@ function sendVerificationEmail(index, recipientAddress) {
 	      subject: emailSubject }, function(err, message) {
 		  if(err) {
 		      servicelog(err + " : " + JSON.stringify(message));
-		      setStatustoClient(index, "Failed sending email!");
+		      setStatustoClient(cookie, "Failed sending email!");
 		  } else {
 		      servicelog("Sent password reset email to " + recipientAddress);
-		      setStatustoClient(index, "Sent email");
+		      setStatustoClient(cookie, "Sent email");
 		  }
 	      });
 }
 
-function sendReservationEmail(index, reservationTotals) {
-    var recipientAddress = globalConnectionList[index].user.email;
+function sendReservationEmail(cookie, reservationTotals) {
+    var recipientAddress = cookie.user.email;
     var emailData = datastorage.read("email");
     if(reservationTotals === false) {
 	var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_SUBJECT");
@@ -508,10 +508,10 @@ function sendReservationEmail(index, reservationTotals) {
 	      subject: emailSubject }, function(err, message) {
 		  if(err) {
 		      servicelog(err + " : " + JSON.stringify(message));
-		      setStatustoClient(index, "Failed sending email!");
+		      setStatustoClient(cookie, "Failed sending email!");
 		  } else {
 		      servicelog("Sent reservation confirm email to " + recipientAddress);
-		      setStatustoClient(index, "Sent email");
+		      setStatustoClient(cookie, "Sent email");
 		  }
 	      });
 }
