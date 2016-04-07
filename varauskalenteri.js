@@ -104,6 +104,11 @@ function setState(cookie, state) {
 }
 
 function processClientStarted(cookie) {
+    if(cookie["user"] !== undefined) {
+	if(cookie.user["username"] !== undefined) {
+	    servicelog("User " + cookie.user.username + " logged out");
+	}
+    }
     servicelog("Sending initial login view to client #" + cookie.count);
     setState(cookie, "clientStarted");
     cookie.aesKey = "";
@@ -283,6 +288,7 @@ function processSendAdminView(cookie, content) {
 	setStatustoClient(cookie, "Admin validation failed!");
 	return;
     } else {
+	servicelog("User " + cookie.user.username + " entering administrator mode");
 	setStatustoClient(cookie, "Admin validation OK!");
 	var reservationData = datastorage.read("reservations");
 	var sendable = { type: "adminView",
