@@ -192,7 +192,7 @@ function processCreateAccount(index, content) {
     }
     if(stateIs(index, "oldUserValidated")) {
 	servicelog("Request account change for user: [" + account.username + "]");
-	var user = getUserByUserame(account.username);
+	var user = getUserByUserName(account.username);
 	if(user.length === 0) {
 	    processClientStarted(index);
 	    setStatustoClient(index, "Illegal user operation!");
@@ -335,28 +335,32 @@ function readUserData() {
 
 function updateUserAccount(account) {
     var userData = readUserData();
- 
-    if(userData.users.filter(function(u) {
-	return u.username === account.username;
-    }).length === 0) {
+    var oldUserAccount = getUserByUserName(account.username);
+    if(oldUserAccount.length === 0) {
 	return false;
     } else {
 	var newUserData = { users : [] };
 	newUserData.users = userData.users.filter(function(u) {
 	    return u.username !== account.username;
 	});
-	account.hash = sha1.hash(account.username);
-	newUserData.users.push(account);
+	var newUserAccount = { username: account.username,
+			       hash: sha1.hash(account.username),
+			       password: account.password,
+			       priviliges: oldUserAccount[0].priviliges };
+	if(account["realname"] !== undefined) { newUserAccount.realname = account.realname; }
+	if(account["email"] !== undefined) { newUserAccount.email = account.email; }
+	if(account["phone"] !== undefined) { newUserAccount.phone = account.phone; }
+	newUserData.users.push(newUserAccount);
 	if(datastorage.write("users", newUserData) === false) {
 	    servicelog("User database write failed");
 	} else {
-	    servicelog("Updated User Account: " + JSON.stringify(account));
+	    servicelog("Updated User Account: " + JSON.stringify(newUserAccount));
 	}
 	return true;
     }
 }
 
-function getUserByUserame(username) {
+function getUserByUserName(username) {
     return readUserData().users.filter(function(u) {
 	return u.username === username;
     });
