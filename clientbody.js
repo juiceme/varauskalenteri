@@ -45,8 +45,8 @@ mySocket.onmessage = function (event) {
     }
 
     if(receivable.type == "adminView") {
-	var reservationData = receivable.content;
-	document.body.replaceChild(createAdminView(reservationData),
+	var calendarData = receivable.content;
+	document.body.replaceChild(createCalendarView(calendarData, 1),
 				   document.getElementById("myDiv1"));
     }
 }
@@ -458,18 +458,7 @@ function sendValidationCode(code) {
     sendToServer("validateAccount", sendable);
 }
 
-function createAdminView(reservationData) {
-    var clearText = JSON.parse(Aes.Ctr.decrypt(reservationData, sessionPassword, 128));
-    clearText.forEach(function(f) {
-	console.log(JSON.stringify(f));
-    });
-    div1 = document.createElement("div");
-    div1.id = "myDiv1";
-  
-    return div1;
-}
-
-function createCalendarView(calendarData) {
+function createCalendarView(calendarData, admin) {
     var clearText = JSON.parse(Aes.Ctr.decrypt(calendarData, sessionPassword, 128));
     var table = document.createElement('table');
     var tableHeader = document.createElement('thead');
@@ -478,7 +467,7 @@ function createCalendarView(calendarData) {
     tableBody.id = "myCalendar";
 
     clearText.season.forEach(function(week) {
-	var row = createWeek(week);
+	var row = createWeek(week, admin);
 	tableBody.appendChild(row);
     });
 
@@ -542,31 +531,39 @@ function createHeader(year) {
     return row;
 }
 
-function createWeek(week) {
+function createWeek(week, admin) {
     var row = document.createElement('tr');
     var cell = document.createElement('td');
     cell.innerHTML = "<b>week " + week.week + "</b>";
     row.appendChild(cell);
     week.days.forEach(function(day) {
-	var cell = createDay(day);
+	var cell = createDay(day, admin);
 	row.appendChild(cell);
     });
     return row;
 }
 
-function createDay(day) {
+function createDay(day, admin) {
+    console.log(JSON.stringify(day));
+
     var cell = document.createElement('td');
     cell.width="12%"
     cell.innerHTML = day.date + "<br><br>"
-    cell.state = day.items.state;
     cell.daytype = day.type;
-    cell.title = getCellTitle(day.items.state);
-    cell.style.backgroundColor = colorCellState(cell.state, cell.daytype);
-    cell.onclick = function () { calendarCellClicked(this); };
-//    cell.appendChild(document.createTextNode(day.date));
-//    cell.appendChild(document.createTextNode(day.state)); /
-//    cell.id = "calendarDay_" + dayIndex++;
     cell.id = day.date;
+
+    if (admin === 1) {
+	cell.adminState = "untouched";
+	cell.items = day.items;
+	cell.title = getAdminCellTitle(cell.items);
+	cell.style.backgroundColor = colorAdminCellState(cell.items, cell.daytype);
+	cell.onclick = function () { calendarAdminCellClicked(this); };
+    } else {
+	cell.state = day.items.state;
+	cell.title = getUserCellTitle(day.items.state);
+	cell.style.backgroundColor = colorUserCellState(cell.state, cell.daytype);
+	cell.onclick = function () { calendarUserCellClicked(this); };
+    }
     dayList.push({ date: cell.id, type: cell.daytype });
     return cell;
 }
@@ -580,7 +577,7 @@ var COLOR_OWN_CONFIRMED = "#0041C2";
 var COLOR_OTHER_CONFIRMED = "#FF0000";
 var COLOR_OWN_UNCONFIRMED = "#82e0aa";
 
-function colorCellState(state, daytype) {
+function colorUserCellState(state, daytype) {
     if(state === "free" && daytype === "weekend") { return COLOR_FREE2; }
     if(state === "free" && daytype === "weekday") { return COLOR_FREE1; }
     if(state === "own_reserved") { return COLOR_OWN_RESERVED; }
@@ -592,7 +589,20 @@ function colorCellState(state, daytype) {
     if(state === "unconfirmed_conditional") { return COLOR_OWN_UNCONFIRMED; }    
 }
 
-function getCellTitle(state) {
+function colorAdminCellState(items, daytype) {
+    var color = COLOR_FREE1;
+    if(items.length === 0) {
+	if(daytype === "weekend") { return COLOR_FREE2; }
+	else  { return COLOR_FREE1; }
+    }
+    items.forEach(function(f) {
+	if(f.state === "reserved") { color = COLOR_OWN_CONFIRMED; }
+    });
+    if(color === COLOR_OWN_CONFIRMED) { return color; }
+    else { return COLOR_OWN_RESERVED; }
+}
+
+function getUserCellTitle(state) {
     if(state === "free") { return "free"; }
     if(state === "own_reserved") { return "reserved for you"; }
     if(state === "other_reserved") { return "reserved for others"; }
@@ -603,7 +613,17 @@ function getCellTitle(state) {
     if(state === "unconfirmed_conditional") { return "marked for you"; }    
 }
 
-function calendarCellClicked(cell) {
+function getAdminCellTitle(items) {
+    var label = "";
+    if(items.length === 0) { return "free"; }
+    items.forEach(function(f) {
+	if(f.state === "pending") { label += "reserved for " + f.user + "\n"; }
+	if(f.state === "reserved") { label += "confirmed for " + f.user + "\n"; }	    
+    });
+    return label;
+}
+
+function calendarUserCellClicked(cell) {
     document.getElementById("myStatusField").value = "Editing reservation";
 
     document.body.replaceChild(createCheckReservationButton(),
@@ -612,7 +632,7 @@ function calendarCellClicked(cell) {
     if(cell.state === "free") {
 	cell.state = "unconfirmed";
 	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
-	cell.title = getCellTitle(cell.state);
+	cell.title = getUserCellTitle(cell.state);
 	return;
     }
     if(cell.state === "unconfirmed") {
@@ -622,7 +642,7 @@ function calendarCellClicked(cell) {
 	} else {
 	    cell.style.backgroundColor = COLOR_FREE2;
 	}
-	cell.title = getCellTitle(cell.state);
+	cell.title = getUserCellTitle(cell.state);
 	return;
     }
     if (cell.state === "own_reserved") {
@@ -632,25 +652,40 @@ function calendarCellClicked(cell) {
 	} else {
 	    cell.style.backgroundColor = COLOR_FREE2;
 	}
-	cell.title = getCellTitle(cell.state);
+	cell.title = getUserCellTitle(cell.state);
 	return;
     }
     if (cell.state === "other_reserved") {
 	cell.state = "unconfirmed_conditional";
 	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
-	cell.title = getCellTitle(cell.state);
+	cell.title = getUserCellTitle(cell.state);
 	return;
     }
     if (cell.state === "unconfirmed_conditional") {
 	cell.state = "other_reserved";
 	cell.style.backgroundColor = COLOR_OTHER_RESERVED;
-	cell.title = getCellTitle(cell.state);
+	cell.title = getUserCellTitle(cell.state);
 	return;
     }
     if (cell.state === "both_reserved") {
 	cell.state = "other_reserved";
 	cell.style.backgroundColor = COLOR_OTHER_RESERVED;
-	cell.title = getCellTitle(cell.state);
+	cell.title = getUserCellTitle(cell.state);
+	return;
+    }
+}
+
+function calendarAdminCellClicked(cell) {
+    if(cell.items.length === 0) { return; }
+ 
+    if(cell.adminState === "untouched") {
+	cell.adminState = "touched";
+	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
+	return;
+    }
+    if(cell.adminState === "touched") {
+	cell.adminState = "untouched";
+	cell.style.backgroundColor = colorAdminCellState(cell.items, cell.daytype);
 	return;
     }
 }

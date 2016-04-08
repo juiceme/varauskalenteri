@@ -153,7 +153,7 @@ function processLoginResponse(cookie, content) {
 	setState(cookie, "loggedIn");
 	setStatustoClient(cookie, "Login OK");
         sendable = { type: "calendarData",
-		     content: createCalendarSendable(cookie.user.username) };
+		     content: createUserCalendarSendable(cookie.user.username) };
 	sendCipherTextToClient(cookie, sendable);
 	if(isUserAdministrator(cookie.user)) {
 	    sendable = { type: "enableAdminButton", content:"none" };
@@ -275,7 +275,7 @@ function processSendReservation(cookie, content) {
     }
     setStatustoClient(cookie, "Reservation sent");
     sendable = { type: "calendarData",
-		 content: createCalendarSendable(cookie.user.username) };
+		 content: createUserCalendarSendable(cookie.user.username) };
     sendCipherTextToClient(cookie, sendable);
     var reservationTotals = calculateReservationTotals(reservation);
     sendReservationEmail(cookie, reservationTotals);
@@ -292,7 +292,7 @@ function processSendAdminView(cookie, content) {
 	setStatustoClient(cookie, "Admin validation OK!");
 	var reservationData = datastorage.read("reservations");
 	var sendable = { type: "adminView",
-			 content: reservationData.reservations };
+			 content: createAdminCalendarSendable() };
 	sendCipherTextToClient(cookie, sendable);
     }
 }
@@ -531,15 +531,25 @@ function getNewChallenge() {
     return ("challenge_" + sha1.hash(globalSalt + new Date().getTime().toString()) + "1");
 }
 
-function createCalendarSendable(user) {
+function createAdminCalendarSendable() {
+    return createCalendarSendable(null, 1);
+}
+
+function createUserCalendarSendable(user) {
+    return createCalendarSendable(user);
+}
+
+function createCalendarSendable(user, admin) {
     var calendarData = datastorage.read("calendar");
     var weeks = [];
     calendarData.season.forEach(function(w) {
 	var days = [];
 	w.days.forEach(function(d) {
+	    if(admin === 1) { var items = getAllReservationsForDay(d); }
+	    else { var items = getReservationsForDay(d, user); }
 	    days.push({ date: d.date,
 			type: d.type,
-			items: getReservationsForDay(d, user) });
+			items: items });
 	});
 	weeks.push({ week: w.week, days: days });
     });
@@ -577,6 +587,19 @@ function getReservationsForDay(day, user) {
     if(ownReservation === 0) return { state: "other_reserved" };
     if(otherReservation === 0) return { state: "own_reserved" };
     return { state: "both_reserved" };
+}
+
+function getAllReservationsForDay(day) {
+    var reservationData = datastorage.read("reservations");
+    var reservation = [];
+    reservationData.reservations.forEach(function(r) {
+	if(r.reservation.filter(function(f) {
+	    return f === day.date
+	}).length !== 0 ) {
+	    reservation.push({user: r.user, state: r.state});
+	}
+    });
+    return reservation;
 }
 
 function getLanguageText(language, tag) {
