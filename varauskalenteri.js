@@ -208,7 +208,6 @@ function processCreateAccount(cookie, content) {
 	} else {
 	    processClientStarted(cookie);
 	    setStatustoClient(cookie, "Account created!");
-
 	    var emailSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_CONFIRM_SUBJECT");
 	    var emailAdminSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_CONFIRM_ADMIN_SUBJECT");
 	    var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
@@ -231,12 +230,12 @@ function processCreateAccount(cookie, content) {
 	    setStatustoClient(cookie, "Illegal user operation!");
 	    return;
 	} else {
-	    processClientStarted(cookie);
-	    if(updateUserAccount(account)) {
+	    if(updateUserAccount(cookie, account)) {
 		setStatustoClient(cookie, "Account updated!");
 	    } else {
 		setStatustoClient(cookie, "Account update failed!");
 	    }
+	    processClientStarted(cookie);
 	    return;
 	}
     }
@@ -367,7 +366,7 @@ function readUserData() {
     return userData;
 }
 
-function updateUserAccount(account) {
+function updateUserAccount(cookie, account) {
     var userData = readUserData();
     var oldUserAccount = getUserByUserName(account.username);
     if(oldUserAccount.length === 0) {
@@ -390,6 +389,17 @@ function updateUserAccount(account) {
 	} else {
 	    servicelog("Updated User Account: " + JSON.stringify(newUserAccount));
 	}
+	var emailSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_CONFIRM_SUBJECT");
+	var emailAdminSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_CONFIRM_ADMIN_SUBJECT");
+	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+						       "PASSWORD_RESET_CONFIRM_GREETING"),
+				       account.username,
+				       mainConfig.main.siteFullUrl);
+	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+							    "PASSWORD_RESET_CONFIRM_ADMIN_GREETING"),
+					    account.username);
+	sendEmail(cookie, emailSubject, emailBody, account.email);
+	sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
 	return true;
     }
 }
@@ -482,20 +492,14 @@ function sendVerificationEmail(cookie, recipientAddress) {
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "NEW_ACCOUNT_REQUEST_GREETING"),
 				       (request.token.mail + request.token.key));
-	sendEmail(cookie, emailSubject, emailBody, recipientAddress);
     } else {
 	var emailSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_SUBJECT");
-	var emailAdminSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_ADMIN_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "PASSWORD_RESET_GREETING"),
 				       getUserByEmail(recipientAddress)[0].username,
 				       (request.token.mail + request.token.key));
-	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-							    "PASSWORD_RESET_ADMIN_GREETING"),
-					    getUserByEmail(recipientAddress)[0].username);
-	sendEmail(cookie, emailSubject, emailBody, recipientAddress);
-	sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
     }
+    sendEmail(cookie, emailSubject, emailBody, recipientAddress);
 }
 
 
