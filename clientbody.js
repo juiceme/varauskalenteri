@@ -603,14 +603,14 @@ function colorAdminCellState(items, daytype) {
 }
 
 function getUserCellTitle(state) {
-    if(state === "free") { return "free"; }
-    if(state === "own_reserved") { return "reserved for you"; }
-    if(state === "other_reserved") { return "reserved for others"; }
-    if(state === "both_reserved") { return "conditionally reserved for you"; }    
-    if(state === "own_confirmed") { return "confirmed for you"; }
-    if(state === "other_confirmed") { return "confirmed for others"; }
-    if(state === "unconfirmed") { return "marked for you"; }    
-    if(state === "unconfirmed_conditional") { return "marked for you"; }    
+    if(state === "free") { return CLIENT_CALENDARTEXT_FREE; }
+    if(state === "own_reserved") { return CLIENT_CALENDARTEXT_OWN_RESERVED; }
+    if(state === "other_reserved") { return CLIENT_CALENDARTEXT_OTHER_RESERVED; }
+    if(state === "both_reserved") { return CLIENT_CALENDARTEXT_BOTH_RESERVED; }    
+    if(state === "own_confirmed") { return CLIENT_CALENDARTEXT_OWN_CONFIRMED; }
+    if(state === "other_confirmed") { return CLIENT_CALENDARTEXT_OTHER_CONFIRMED; }
+    if(state === "unconfirmed") { return CLIENT_CALENDARTEXT_OWN_MARKED; }    
+    if(state === "unconfirmed_conditional") { return CLIENT_CALENDARTEXT_OWN_MARKED; }    
 }
 
 function getAdminCellTitle(items) {

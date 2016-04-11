@@ -30,9 +30,25 @@ function sendCipherTextToClient(cookie, sendable) {
     cookie.connection.send(JSON.stringify(cipherSendable));
 }
 
+function printLanguageVariable(tag, language) {
+    return "var " + tag + " = \"" + getLanguageText(language, tag) + "\";"
+}
+
+function getClientVariables(language) {
+    var language = mainConfig.main.language;
+    return "var WEBSOCK_PORT = " + mainConfig.main.port + ";\n" +
+	printLanguageVariable("CLIENT_CALENDARTEXT_FREE", language) + "\n" +
+	printLanguageVariable("CLIENT_CALENDARTEXT_OWN_RESERVED", language) + "\n" +
+	printLanguageVariable("CLIENT_CALENDARTEXT_OTHER_RESERVED", language) + "\n" +
+	printLanguageVariable("CLIENT_CALENDARTEXT_BOTH_RESERVED", language) + "\n" +
+	printLanguageVariable("CLIENT_CALENDARTEXT_OWN_CONFIRMED", language) + "\n" +
+	printLanguageVariable("CLIENT_CALENDARTEXT_OTHER_CONFIRMED", language) + "\n" +
+	printLanguageVariable("CLIENT_CALENDARTEXT_OWN_MARKED", language) + "\n\n";
+}
+
 var webServer = http.createServer(function(request,response){
     var clienthead = fs.readFileSync("./clienthead", "utf8");
-    var variables = "var WEBSOCK_PORT = " + mainConfig.main.port + "\n\n";
+    var variables = getClientVariables();
     var clientbody = fs.readFileSync("./clientbody.js", "utf8");
     var aesjs = fs.readFileSync("./crypto/aes.js", "utf8");
     var aesctrjs = fs.readFileSync("./crypto/aes-ctr.js", "utf8");
