@@ -208,6 +208,18 @@ function processCreateAccount(cookie, content) {
 	} else {
 	    processClientStarted(cookie);
 	    setStatustoClient(cookie, "Account created!");
+
+	    var emailSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_CONFIRM_SUBJECT");
+	    var emailAdminSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_CONFIRM_ADMIN_SUBJECT");
+	    var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+							   "NEW_ACCOUNT_CONFIRM_GREETING"),
+					   account.username,
+					   mainConfig.main.siteFullUrl);
+	    var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+								"NEW_ACCOUNT_CONFIRM_ADMIN_GREETING"),
+						account.username);
+	    sendEmail(cookie, emailSubject, emailBody, account.email);
+	    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
 	    return;
 	}
     }
@@ -466,55 +478,56 @@ function sendVerificationEmail(cookie, recipientAddress) {
 	servicelog("Pending database write failed");
     }
     if(getUserByEmail(recipientAddress).length === 0) {
-	var emailSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_SUBJECT");
+	var emailSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_REQUEST_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-						       "NEW_ACCOUNT_GREETING"),
+						       "NEW_ACCOUNT_REQUEST_GREETING"),
 				       (request.token.mail + request.token.key));
+	sendEmail(cookie, emailSubject, emailBody, recipientAddress);
     } else {
 	var emailSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_SUBJECT");
+	var emailAdminSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_ADMIN_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "PASSWORD_RESET_GREETING"),
 				       getUserByEmail(recipientAddress)[0].username,
 				       (request.token.mail + request.token.key));
+	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+							    "PASSWORD_RESET_ADMIN_GREETING"),
+					    getUserByEmail(recipientAddress)[0].username);
+	sendEmail(cookie, emailSubject, emailBody, recipientAddress);
+	sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
     }
-    if(emailData.blindlyTrust) {
-	servicelog("Trusting self-signed certificates");
-	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    }
-    email.server.connect({
-	user: emailData.user,
-	password: emailData.password,
-	host: emailData.host,
-	ssl: emailData.ssl
-    }).send({ text: emailBody,
-	      from: emailData.sender,
-	      to: recipientAddress,
-	      subject: emailSubject }, function(err, message) {
-		  if(err) {
-		      servicelog(err + " : " + JSON.stringify(message));
-		      setStatustoClient(cookie, "Failed sending email!");
-		  } else {
-		      servicelog("Sent password reset email to " + recipientAddress);
-		      setStatustoClient(cookie, "Sent email");
-		  }
-	      });
 }
+
 
 function sendReservationEmail(cookie, reservationTotals) {
     var recipientAddress = cookie.user.email;
     var emailData = datastorage.read("email");
     if(reservationTotals === false) {
 	var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_SUBJECT");
+	var emailAdminSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_ADMIN_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "RESERVATION_CANCEL_GREETING"),
 				       getUserByEmail(recipientAddress)[0].username);
+	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+						       "RESERVATION_CANCEL_ADMIN_GREETING"),
+				       getUserByEmail(recipientAddress)[0].username);
     } else {
 	var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CONFIRM_SUBJECT");
+	var emailAdminSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CONFIRM_ADMIN_SUBJECT");
 	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						       "RESERVATION_CONFIRM_GREETING"),
 				       getUserByEmail(recipientAddress)[0].username,
 				       reservationTotals);
+	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+							    "RESERVATION_CONFIRM_ADMIN_GREETING"),
+					    getUserByEmail(recipientAddress)[0].username);
     }
+    sendEmail(cookie, emailSubject, emailBody, recipientAddress);
+    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
+}
+
+function sendEmail(cookie, emailSubject, emailBody, recipientAddress) {
+    var emailData = datastorage.read("email");
     if(emailData.blindlyTrust) {
 	servicelog("Trusting self-signed certificates");
 	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -635,7 +648,9 @@ function fillTagsInText(text) {
 }
 
 // datastorage.setLogger(servicelog);
-datastorage.initialize("main", { main : { port:8080, language:"english" } });
+datastorage.initialize("main", { main : { port : 8080, language : "english",
+					  adminEmailAddess : "you <username@your-email.com>",
+					  siteFullUrl : "http://url.to.varauskalenteri/" } });
 datastorage.initialize("users", { users : [] }, true);
 datastorage.initialize("pending", { pending : [] }, true);
 datastorage.initialize("calendar", { year : "2016", season : [] });
