@@ -43,7 +43,16 @@ function getClientVariables(language) {
 	printLanguageVariable("CLIENT_CALENDARTEXT_BOTH_RESERVED", language) + "\n" +
 	printLanguageVariable("CLIENT_CALENDARTEXT_OWN_CONFIRMED", language) + "\n" +
 	printLanguageVariable("CLIENT_CALENDARTEXT_OTHER_CONFIRMED", language) + "\n" +
-	printLanguageVariable("CLIENT_CALENDARTEXT_OWN_MARKED", language) + "\n\n";
+	printLanguageVariable("CLIENT_CALENDARTEXT_OWN_MARKED", language) + "\n" +
+	printLanguageVariable("HELPTEXT_LOGIN_A", language) + "\n" +
+	printLanguageVariable("HELPTEXT_LOGIN_B", language) + "\n" +
+	printLanguageVariable("HELPTEXT_LOGIN_C", language) + "\n" +
+	printLanguageVariable("HELPTEXT_EMAIL_A", language) + "\n" +
+	printLanguageVariable("HELPTEXT_EMAIL_B", language) + "\n" +
+	printLanguageVariable("HELPTEXT_CALENDAR_A", language) + "\n" +
+	printLanguageVariable("HELPTEXT_CALENDAR_B", language) + "\n" +
+	printLanguageVariable("HELPTEXT_CALENDAR_C", language) + "\n" +
+	printLanguageVariable("HELPTEXT_CALENDAR_D", language) + "\n\n";
 }
 
 var webServer = http.createServer(function(request,response){

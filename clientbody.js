@@ -16,6 +16,7 @@ mySocket.onmessage = function (event) {
 
     if(receivable.type == "loginView") {
 	document.body.replaceChild(createLoginView(), document.getElementById("myDiv1"));
+	document.body.replaceChild(createLoginHelpText(), document.getElementById("myHelpText"));
     }
 
     if(receivable.type == "loginChallenge") {
@@ -37,6 +38,7 @@ mySocket.onmessage = function (event) {
 				   document.getElementById("myDiv1"));
 	document.body.replaceChild(createCheckReservationButton(),
 				   document.getElementById("myConfirmButton"));
+	document.body.replaceChild(createCalendarHelpText(), document.getElementById("myHelpText"));
     }
 
     if(receivable.type == "enableAdminButton") {
@@ -134,9 +136,51 @@ function createLoginView() {
     tBody.appendChild(bRow5);
 
     table.appendChild(tBody);
-    table.id= "myDiv1";
+    table.id = "myDiv1";
 
     return table;
+}
+
+function createLoginHelpText() {
+    var helpTextBox = document.createElement("fieldset");
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_LOGIN_A))))
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_LOGIN_B))))
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_LOGIN_C))))
+    helpTextBox.id = "myHelpText";
+
+    return helpTextBox;
+}
+
+function createCalendarHelpText() {
+    var helpTextBox = document.createElement("fieldset");
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_CALENDAR_A))))
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_CALENDAR_B))))
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_CALENDAR_C))))
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_CALENDAR_D))))
+    helpTextBox.id = "myHelpText";
+
+    return helpTextBox;
+}
+
+function createEmailHelpText() {
+    var helpTextBox = document.createElement("fieldset");
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_EMAIL_A))))
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createElement("br"));
+    helpTextBox.appendChild(document.createTextNode(decodeURIComponent(escape(HELPTEXT_EMAIL_B))))
+    helpTextBox.id = "myHelpText";
+
+    return helpTextBox;
 }
 
 function createEmailView() {
@@ -399,6 +443,7 @@ function sendLogin(username, password) {
 function createAccountQuery() {
     document.body.replaceChild(createEmailView(), document.getElementById("myDiv1"));
     document.getElementById("myStatusField").value = "Creating/Reseting account";
+    document.body.replaceChild(createEmailHelpText(), document.getElementById("myHelpText"));
 }
 
 function checkEmailValidity(address) {
