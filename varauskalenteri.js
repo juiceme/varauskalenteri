@@ -66,6 +66,7 @@ var webServer = http.createServer(function(request,response){
     response.writeHeader(200, {"Content-Type": "text/html"});
     response.write(sendable);
     response.end();
+    servicelog("Respond with client to: " + JSON.stringify(request.headers));
 });
 
 wsServer = new websocket.server({
