@@ -10,15 +10,17 @@ Data for the recipients and items are stored as JSON files. Web-interface enable
 ## Installation
 
 Varauskalenteri requires websocket and emailjs npm modules. You can install all depencencies by "npm install"
-The repository clones AES library as submodule, You need to install it by "git submodule init; git submodule update"
+The repository clones AES cryptography and datastorage libraries as submodules, You need to install them by "git submodule init; git submodule update"
 
 ## Features
 
-* Clients managed in JSON file
+* Users managed in JSON file
 * Calendar data managed in JSON file
-* Web frontend to manage gnd generate entries
+* User passwords are not stored in plaintext but hashed in both client and server
+* Web frontend to manage and generate entries
 * Uses AES-CTR encryption between server and client to defeat man-in-the-middle attacks.
-* Automatic batch mailing
+* Automatic mailing of resesrvation entries to users
+* User password recovery via email
   
 ## Coming soon!
 
