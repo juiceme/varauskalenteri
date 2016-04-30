@@ -463,7 +463,7 @@ function createAccount(account) {
 
 function validateAccountCode(code) {
     var userData = datastorage.read("pending");
-    if(Object.keys(userData).length === 0) {
+    if(Object.keys(userData.pending).length === 0) {
 	servicelog("Empty pending requests database, bailing out");
 	return false;
     } 
@@ -490,9 +490,11 @@ function validateAccountCode(code) {
 function sendVerificationEmail(cookie, recipientAddress) {
     var pendingData = datastorage.read("pending");
     var emailData = datastorage.read("email");
+    var timeout = new Date();
+    timeout.setHours(timeout.getHours() + 24);
     var request = { email: recipientAddress,
 		    token: generateEmailToken(recipientAddress),
-		    date: new Date().getTime() };
+		    date: timeout.getTime() };
     pendingData.pending.push(request);
     if(datastorage.write("pending", pendingData) === false) {
 	servicelog("Pending database write failed");
@@ -660,6 +662,36 @@ function fillTagsInText(text) {
     }
     return text;
 }
+
+setInterval(function() {
+    var now = new Date().getTime();
+    var userData = datastorage.read("pending");
+    if(Object.keys(userData.pending).length === 0) {
+	servicelog("No pending requests to purge");
+	return;
+    }
+    
+    var purgeCount = 0
+    var newUserData = { pending : [] };
+    userData.pending.forEach(function(r) {
+	if(r.date < now) {
+	    purgeCount++;
+	} else {
+	    newUserData.pending.push(r);
+	}
+    });
+
+    if(purgeCount === 0) {
+	servicelog("No pending requests timeouted");
+	return;
+    } else {
+	if(datastorage.write("pending", newUserData) === false) {
+	    servicelog("Pending requests database write failed");
+	} else {
+	    servicelog("Removed " + purgeCount + " timeouted pending requests");
+	}
+    }
+}, 1000*60*60);
 
 // datastorage.setLogger(servicelog);
 datastorage.initialize("main", { main : { port : 8080, language : "english",
