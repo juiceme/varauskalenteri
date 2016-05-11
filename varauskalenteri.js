@@ -63,7 +63,10 @@ var webServer = http.createServer(function(request,response){
     var aesctrjs = fs.readFileSync("./crypto/aes-ctr.js", "utf8");
     var sha1js = fs.readFileSync("./crypto/sha1.js", "utf8");
     var sendable = clienthead + variables + clientbody + aesjs + aesctrjs + sha1js + "</script></body></html>";
-    response.writeHeader(200, {"Content-Type": "text/html"});
+    response.writeHeader(200, { "Content-Type": "text/html",
+                                "X-Frame-Options": "deny",
+                                "X-XSS-Protection": "1; mode=block",
+                                "X-Content-Type-Options": "nosniff" });
     response.write(sendable);
     response.end();
     servicelog("Respond with client to: " + JSON.stringify(request.headers));
