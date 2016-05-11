@@ -325,6 +325,13 @@ function processSendReservation(cookie, content) {
     sendReservationEmail(cookie, reservationTotals);
 }
 
+function applyAdminReservationChange(user) {
+    var reservationData = datastorage.read("reservations");
+
+    // add pending and reserved entries to database
+
+}
+
 function processSendAdminView(cookie, content) {
     if(!isUserAdministrator(cookie.user)) {
 	servicelog("User " + cookie.user.username + " is not an administrator");
@@ -351,7 +358,9 @@ function processAdminChange(cookie, content) {
 	var adminChange = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
 	servicelog("Administrative change by " + cookie.user.username + ": " +
 		   JSON.stringify(adminChange));
-	
+	adminChange.change.forEach(function(user) {
+	    applyAdminReservationChange(user);
+	});
     }
 }
 
