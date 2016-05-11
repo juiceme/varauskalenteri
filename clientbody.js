@@ -48,8 +48,14 @@ mySocket.onmessage = function (event) {
 
     if(receivable.type == "adminView") {
 	var calendarData = receivable.content;
+	document.body.replaceChild(createLogoutButton(),
+				   document.getElementById("myLogoutButton"));
+	document.body.replaceChild(createUserButton(),
+				   document.getElementById("myAdminButton"));
 	document.body.replaceChild(createCalendarView(calendarData, 1),
 				   document.getElementById("myDiv1"));
+	document.body.replaceChild(createCheckAdminButton(),
+				   document.getElementById("myConfirmButton"));
     }
 }
 
@@ -535,7 +541,16 @@ function createLogoutButton() {
 function createAdminButton() {
     var button = document.createElement("button");  
     button.onclick = function() { sendToServer("adminRequest", "none"); }
-    var text = document.createTextNode("Administration");
+    var text = document.createTextNode("Administration Mode");
+    button.appendChild(text);
+    button.id = "myAdminButton";
+    return button;
+}
+
+function createUserButton() {
+    var button = document.createElement("button");  
+    button.onclick = function() { sendToServer("userRequest", "none"); }
+    var text = document.createTextNode("User Mode");
     button.appendChild(text);
     button.id = "myAdminButton";
     return button;
@@ -784,6 +799,15 @@ function createCheckReservationButton() {
     return button;
 }
 
+function createCheckAdminButton() {
+    var button = document.createElement("button");
+    button.onclick = function() { checkAdminFunction(); }
+    var text = document.createTextNode("Check admin function");
+    button.appendChild(text);
+    button.id = "myConfirmButton";
+    return button;
+}
+
 function getReservedDays() {
     return dayList.filter(function(day) {
 	return ((document.getElementById(day.date).state === "own_reserved") ||
@@ -791,6 +815,10 @@ function getReservedDays() {
 		(document.getElementById(day.date).state === "unconfirmed") ||
 		(document.getElementById(day.date).state === "unconfirmed_conditional"));
     });
+}
+
+function checkAdminFunction() {
+    console.log("checkAdminFunction() called");
 }
 
 function checkReservation() {

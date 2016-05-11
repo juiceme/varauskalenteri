@@ -115,6 +115,8 @@ wsServer.on('request', function(request) {
 	       stateIs(cookie, "loggedIn")) { processSendReservation(cookie, content); }
 	    if((type === "adminRequest") &&
 	       stateIs(cookie, "loggedIn")) { processSendAdminView(cookie, content); }
+	    if((type === "userRequest") &&
+	       stateIs(cookie, "loggedIn")) { processSendUserView(cookie, content); }
 	}
     });
 
@@ -335,6 +337,16 @@ function processSendAdminView(cookie, content) {
 			 content: createAdminCalendarSendable() };
 	sendCipherTextToClient(cookie, sendable);
     }
+}
+
+function processSendUserView(cookie, content) {
+    var sendable = { type: "calendarData",
+		     content: createUserCalendarSendable(cookie.user.username) };
+    sendCipherTextToClient(cookie, sendable);
+    sendable = { type: "enableAdminButton", content:"none" };
+    sendCipherTextToClient(cookie, sendable);
+    servicelog("User " + cookie.user.username + " exiting administrator mode");
+    setStatustoClient(cookie, "User validation OK!");
 }
 
 function isUserAdministrator(user) {
