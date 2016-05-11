@@ -575,11 +575,9 @@ function logout() {
     document.getElementById("myStatusField").value = "started";
 }
 
-var dayIndex;
 var dayList;
 
 function createHeader(year) {
-    dayIndex = 0;
     dayList = [];
     var days = ["Season " + year , "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" ];
     var row = document.createElement('tr');
@@ -604,8 +602,6 @@ function createWeek(week, admin) {
 }
 
 function createDay(day, admin) {
-    console.log(JSON.stringify(day));
-
     var cell = document.createElement('td');
     cell.width="12%"
     cell.innerHTML = day.date + "<br><br>"
@@ -613,8 +609,9 @@ function createDay(day, admin) {
     cell.id = day.date;
 
     if (admin === 1) {
-	cell.adminState = "untouched";
+	cell.adminState = 0;
 	cell.items = day.items;
+	cell.newItem = {};
 	cell.title = getAdminCellTitle(cell.items);
 	cell.style.backgroundColor = colorAdminCellState(cell.items, cell.daytype);
 	cell.onclick = function () { calendarAdminCellClicked(this); };
@@ -737,20 +734,38 @@ function calendarUserCellClicked(cell) {
 
 function calendarAdminCellClicked(cell) {
     if(cell.items.length === 0) { return; }
- 
-    if(cell.adminState === "untouched") {
-	cell.adminState = "touched";
+
+    document.getElementById("myStatusField").value = "Editing reservation";
+
+    document.body.replaceChild(createCheckAdminButton(),
+			       document.getElementById("myConfirmButton"));
+
+    if(cell.adminState < cell.items.length) {
+	cell.adminState++;
 	cell.style.backgroundColor = COLOR_OWN_UNCONFIRMED;
+	if(cell.items[0].state === "reserved") {
+	    cell.newItem = { user : cell.items[0].user,
+			     state : "pending" };
+	    cell.title = "OLD: " + getAdminCellTitle(cell.items) +
+		"\nNEW: reserved for " + cell.items[0].user;
+	} else {
+	    cell.newItem = { user : cell.items[cell.adminState-1].user,
+			     state : "reserved" };
+	    cell.title = "OLD: " + getAdminCellTitle(cell.items) +
+		"\nNEW: confirmed for " + cell.items[cell.adminState-1].user;
+	}
 	return;
-    }
-    if(cell.adminState === "touched") {
-	cell.adminState = "untouched";
+    } else {
+	cell.adminState = 0;
 	cell.style.backgroundColor = colorAdminCellState(cell.items, cell.daytype);
+	cell.newItem = {};
+	cell.title = getAdminCellTitle(cell.items);
 	return;
     }
+
 }
 
-function createConfirmButton() {
+function createConfirmButton(adminMode) {
     var table = document.createElement('table');
     var tHeader = document.createElement('thead');
     var tBody = document.createElement('tbody');
@@ -768,8 +783,13 @@ function createConfirmButton() {
     tHeader.appendChild(hRow);
     table.appendChild(tHeader);
 
-    button.onclick = function() { confirmReservation(); }
-    var text = document.createTextNode("Confirm reservation");
+    if(adminMode) {
+	button.onclick = function() { confirmAdminChange(); }
+	var text = document.createTextNode("Confirm change");
+    } else {
+	button.onclick = function() { confirmReservation(); }
+	var text = document.createTextNode("Confirm reservation");
+    }
     button.appendChild(text);
     totalsField.rows = "1";
     totalsField.cols = "70";
@@ -817,8 +837,59 @@ function getReservedDays() {
     });
 }
 
+function getAdminModifiedDays() {
+    return dayList.map(function(day) {
+	if(Object.getOwnPropertyNames(document.getElementById(day.date).newItem).length !== 0) {
+	    return { date : day.date,
+		     user : document.getElementById(day.date).newItem.user,
+		     state : document.getElementById(day.date).newItem.state };
+	}
+    }).filter(function(f) { return f; });
+}
+
 function checkAdminFunction() {
-    console.log("checkAdminFunction() called");
+    list = getAdminDays();
+    if(list.length === 0) { return; }
+
+    document.body.replaceChild(createConfirmButton(true),
+			       document.getElementById("myConfirmButton"));
+
+    var prettyList = "";
+    list.forEach(function(user) {
+	prettyList += user.user + ":\n   Confirmed: " + JSON.stringify(user.reserved) +
+	    "\n   Reserved:  " + JSON.stringify(user.pending) + "\n\n";
+    });
+    document.getElementById("myTotalsField").value = prettyList;
+}
+
+function getAdminDays() {
+    var adminDays = getAdminModifiedDays();
+    var users = [];
+    adminDays.forEach(function(day) {
+	if(users.filter(function(f) {
+	    return f === day.user;
+	}).length === 0) {
+	    users.push(day.user);
+	}
+    });
+    if(users.length === 0) { return []; }
+
+    var list = [];
+    users.forEach(function(user) {
+	var pending = [];
+	var reserved = [];
+	adminDays.forEach(function(day) {
+	    if((user === day.user) && (day.state === "pending")) {
+		pending.push(day.date);
+	    }
+	    if((user === day.user) && (day.state === "reserved")) {
+		reserved.push(day.date);
+	    }
+	});
+	list.push({ user: user, pending: pending, reserved: reserved });
+    });
+
+    return list;
 }
 
 function checkReservation() {
@@ -829,7 +900,7 @@ function checkReservation() {
     if(((weekDays + weekendDays) > 14) && (weekendDays > 3)) { discount = 200; }
     if(((weekDays + weekendDays) > 21) && (weekendDays > 5)) { discount = 300; }
     if(((weekDays + weekendDays) > 28) && (weekendDays > 7)) { discount = 400; }
-    document.body.replaceChild(createConfirmButton(),
+    document.body.replaceChild(createConfirmButton(false),
 			       document.getElementById("myConfirmButton"));
     document.getElementById("myTotalsField").value = showTotals(weekDays, weekendDays, discount);
 }
@@ -843,6 +914,11 @@ function showTotals(weekDays, weekendDays, discount) {
 function confirmReservation() {
     var sendable = { reservation: getReservedDays().map(function(d) { return d.date; }) };
     sendToServerEncrypted("sendReservation", sendable);
+}
+
+function confirmAdminChange() {
+    var sendable = { change: getAdminDays() };
+    sendToServerEncrypted("adminChange", sendable);
 }
 
 function sendToServer(type, content) {

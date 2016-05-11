@@ -117,6 +117,8 @@ wsServer.on('request', function(request) {
 	       stateIs(cookie, "loggedIn")) { processSendAdminView(cookie, content); }
 	    if((type === "userRequest") &&
 	       stateIs(cookie, "loggedIn")) { processSendUserView(cookie, content); }
+	    if((type === "adminChange") &&
+	       stateIs(cookie, "loggedIn")) { processAdminChange(cookie, content); }
 	}
     });
 
@@ -336,6 +338,20 @@ function processSendAdminView(cookie, content) {
 	var sendable = { type: "adminView",
 			 content: createAdminCalendarSendable() };
 	sendCipherTextToClient(cookie, sendable);
+    }
+}
+
+function processAdminChange(cookie, content) {
+    if(!isUserAdministrator(cookie.user)) {
+	servicelog("User " + cookie.user.username + " is not an administrator");
+	processClientStarted(cookie);
+	setStatustoClient(cookie, "Admin validation failed!");
+	return;
+    } else {
+	var adminChange = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
+	servicelog("Administrative change by " + cookie.user.username + ": " +
+		   JSON.stringify(adminChange));
+	
     }
 }
 
