@@ -325,11 +325,27 @@ function processSendReservation(cookie, content) {
     sendReservationEmail(cookie, reservationTotals);
 }
 
-function applyAdminReservationChange(user) {
+function applyAdminReservationChange(cookie, userData) {
     var reservationData = datastorage.read("reservations");
+    var account = getUserByUserName(userData.user);
+    if(account.length === 0) {
+	servicelog("Illegal username in reservation state change");
+	return false;
+    }
 
     // add pending and reserved entries to database
 
+    var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_SUBJECT");
+    var emailAdminSubject = getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_ADMIN_SUBJECT");
+    var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+						   "RESERVATION_STATE_CHANGE_GREETING"),
+				   account.username,
+				   JSON.stringify(userData));
+    var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+							"RESERVATION_STATE_CHANGE_ADMIN_GREETING"),
+					account.username);
+    sendEmail(cookie, emailSubject, emailBody, account.email);
+    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
 }
 
 function processSendAdminView(cookie, content) {
@@ -358,8 +374,8 @@ function processAdminChange(cookie, content) {
 	var adminChange = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
 	servicelog("Administrative change by " + cookie.user.username + ": " +
 		   JSON.stringify(adminChange));
-	adminChange.change.forEach(function(user) {
-	    applyAdminReservationChange(user);
+	adminChange.change.forEach(function(userData) {
+	    applyAdminReservationChange(cookie, userData);
 	});
     }
 }
