@@ -327,7 +327,7 @@ function processSendReservation(cookie, content) {
 
 function applyAdminReservationChange(cookie, userData) {
     var reservationData = datastorage.read("reservations");
-    var account = getUserByUserName(userData.user);
+    var account = getUserByUserName(userData.user)[0];
     if(account.length === 0) {
 	servicelog("Illegal username in reservation state change");
 	return false;
@@ -335,12 +335,25 @@ function applyAdminReservationChange(cookie, userData) {
 
     // add pending and reserved entries to database
 
+    setStatustoClient(cookie, "Reservation state changed");
+    var sendable = { type: "adminView",
+		     content: createAdminCalendarSendable() };
+    sendCipherTextToClient(cookie, sendable);
+
+    var dayList = "";
+    if(userData.reserved.length !==0) {
+	dayList += "     RESERVED: " + JSON.stringify(userData.reserved) + "\r\n";
+    }
+    if(userData.pending.length !==0) {
+	dayList += "     PENDING:  " + JSON.stringify(userData.pending);
+    }
+
     var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_SUBJECT");
     var emailAdminSubject = getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_ADMIN_SUBJECT");
     var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 						   "RESERVATION_STATE_CHANGE_GREETING"),
 				   account.username,
-				   JSON.stringify(userData));
+				   dayList);
     var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 							"RESERVATION_STATE_CHANGE_ADMIN_GREETING"),
 					account.username);
