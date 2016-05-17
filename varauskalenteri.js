@@ -234,8 +234,8 @@ function processCreateAccount(cookie, content) {
 	    var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 								"NEW_ACCOUNT_CONFIRM_ADMIN_GREETING"),
 						account.username);
-	    sendEmail(cookie, emailSubject, emailBody, account.email);
-	    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
+	    sendEmail(cookie, emailSubject, emailBody, account.email, "account creation");
+	    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "account creation");
 	    return;
 	}
     }
@@ -357,8 +357,8 @@ function applyAdminReservationChange(cookie, userData) {
     var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 							"RESERVATION_STATE_CHANGE_ADMIN_GREETING"),
 					account.username);
-    sendEmail(cookie, emailSubject, emailBody, account.email);
-    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
+    sendEmail(cookie, emailSubject, emailBody, account.email, "reservation admin");
+    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "reservation admin");
 }
 
 function processSendAdminView(cookie, content) {
@@ -477,8 +477,8 @@ function updateUserAccount(cookie, account) {
 	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
 							    "PASSWORD_RESET_CONFIRM_ADMIN_GREETING"),
 					    account.username);
-	sendEmail(cookie, emailSubject, emailBody, account.email);
-	sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
+	sendEmail(cookie, emailSubject, emailBody, account.email, "account update");
+	sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "account update");
 	return true;
     }
 }
@@ -580,7 +580,7 @@ function sendVerificationEmail(cookie, recipientAddress) {
 				       getUserByEmail(recipientAddress)[0].username,
 				       (request.token.mail + request.token.key));
     }
-    sendEmail(cookie, emailSubject, emailBody, recipientAddress);
+    sendEmail(cookie, emailSubject, emailBody, recipientAddress, "account verification");
 }
 
 
@@ -607,11 +607,11 @@ function sendReservationEmail(cookie, reservationTotals) {
 							    "RESERVATION_CONFIRM_ADMIN_GREETING"),
 					    getUserByEmail(recipientAddress)[0].username);
     }
-    sendEmail(cookie, emailSubject, emailBody, recipientAddress);
-    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess);
+    sendEmail(cookie, emailSubject, emailBody, recipientAddress, "reservation update");
+    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "reservation update");
 }
 
-function sendEmail(cookie, emailSubject, emailBody, recipientAddress) {
+function sendEmail(cookie, emailSubject, emailBody, recipientAddress, logline) {
     var emailData = datastorage.read("email");
     if(emailData.blindlyTrust) {
 	servicelog("Trusting self-signed certificates");
@@ -630,7 +630,7 @@ function sendEmail(cookie, emailSubject, emailBody, recipientAddress) {
 		      servicelog(err + " : " + JSON.stringify(message));
 		      setStatustoClient(cookie, "Failed sending email!");
 		  } else {
-		      servicelog("Sent reservation confirm email to " + recipientAddress);
+		      servicelog("Sent " + logline + " email to " + recipientAddress);
 		      setStatustoClient(cookie, "Sent email");
 		  }
 	      });
