@@ -1,37 +1,15 @@
 var websocket = require("websocket");
 var http = require("http");
 var fs = require("fs");
-var email = require("emailjs/email");
-var Aes = require('./crypto/aes.js');
-Aes.Ctr = require('./crypto/aes-ctr.js');
-var sha1 = require('./crypto/sha1.js');
 var datastorage = require('./datastorage/datastorage.js');
-
-var globalSalt = sha1.hash(JSON.stringify(new Date().getTime()));
+var userauth = require('./userauth/userauth.js');
 
 function servicelog(s) {
     console.log((new Date()) + " --- " + s);
 }
 
-function setStatustoClient(cookie, status) {
-    var sendable = { type: "statusData",
-		     content: status };
-    cookie.connection.send(JSON.stringify(sendable));
-}
-
-function sendPlainTextToClient(cookie, sendable) {
-    cookie.connection.send(JSON.stringify(sendable));
-}
-
-function sendCipherTextToClient(cookie, sendable) {
-    var cipherSendable = { type: sendable.type,
-			   content: Aes.Ctr.encrypt(JSON.stringify(sendable.content),
-						    cookie.aesKey, 128) };
-    cookie.connection.send(JSON.stringify(cipherSendable));
-}
-
 function printLanguageVariable(tag, language) {
-    return "var " + tag + " = \"" + getLanguageText(language, tag) + "\";"
+    return "var " + tag + " = \"" + userauth.getLanguageText(language, tag) + "\";"
 }
 
 function getClientVariables(language) {
@@ -58,11 +36,9 @@ function getClientVariables(language) {
 var webServer = http.createServer(function(request,response){
     var clienthead = fs.readFileSync("./clienthead", "utf8");
     var variables = getClientVariables();
+    var uabody = userauth.getClientBody();
     var clientbody = fs.readFileSync("./clientbody.js", "utf8");
-    var aesjs = fs.readFileSync("./crypto/aes.js", "utf8");
-    var aesctrjs = fs.readFileSync("./crypto/aes-ctr.js", "utf8");
-    var sha1js = fs.readFileSync("./crypto/sha1.js", "utf8");
-    var sendable = clienthead + variables + clientbody + aesjs + aesctrjs + sha1js + "</script></body></html>";
+    var sendable = clienthead + variables + clientbody + uabody + "</script></body></html>";
     response.writeHeader(200, { "Content-Type": "text/html",
                                 "X-Frame-Options": "deny",
                                 "X-XSS-Protection": "1; mode=block",
@@ -84,6 +60,7 @@ wsServer.on('request', function(request) {
     var connection = request.accept(null, request.origin);
     var cookie = { count:connectionCount++, connection:connection, state:"new" };
     var sendable;
+    var defaultUserRights = { priviliges : "user" };
     servicelog("Client #" + cookie.count  + " accepted");
 
     connection.on('message', function(message) {
@@ -99,26 +76,27 @@ wsServer.on('request', function(request) {
 		return;
 	    }
 
-//	    servicelog("Incoming message: " + JSON.stringify(receivable));
+	    servicelog("Incoming message: " + JSON.stringify(receivable));
 	    var type = receivable.type;
 	    var content = receivable.content;
 
-            if(type === "clientStarted") { processClientStarted(cookie); }
-	    if(type === "userLogin") { processUserLogin(cookie, content); }
-	    if(type === "loginResponse") { processLoginResponse(cookie, content); }
-	    if(type === "createAccount") { processCreateAccount(cookie, content); }
+            if(type === "clientStarted") { userauth.processClientStarted(cookie); }
+	    if(type === "userLogin") { userauth.processUserLogin(cookie, content); }
+	    if(type === "createAccount") { userauth.processCreateAccount(cookie, defaultUserRights, content); }
 	    if((type === "confirmEmail") &&
-	       stateIs(cookie, "clientStarted")) { processConfirmEmail(cookie, content); }
+	       userauth.stateIs(cookie, "clientStarted")) { userauth.processConfirmEmail(cookie, content); }
 	    if((type === "validateAccount") &&
-	       stateIs(cookie, "clientStarted")) { processValidateAccount(cookie, content); }
+	       userauth.stateIs(cookie, "clientStarted")) { userauth.processValidateAccount(cookie, content); }
+
+	    if(type === "loginResponse") { processLoginResponse(cookie, content); }
 	    if((type === "sendReservation") &&
-	       stateIs(cookie, "loggedIn")) { processSendReservation(cookie, content); }
+	       userauth.stateIs(cookie, "loggedIn")) { processSendReservation(cookie, content); }
 	    if((type === "adminRequest") &&
-	       stateIs(cookie, "loggedIn")) { processSendAdminView(cookie, content); }
+	       userauth.stateIs(cookie, "loggedIn")) { processSendAdminView(cookie, content); }
 	    if((type === "userRequest") &&
-	       stateIs(cookie, "loggedIn")) { processSendUserView(cookie, content); }
+	       userauth.stateIs(cookie, "loggedIn")) { processSendUserView(cookie, content); }
 	    if((type === "adminChange") &&
-	       stateIs(cookie, "loggedIn")) { processAdminChange(cookie, content); }
+	       userauth.stateIs(cookie, "loggedIn")) { processAdminChange(cookie, content); }
 	}
     });
 
@@ -128,69 +106,19 @@ wsServer.on('request', function(request) {
     });
 });
 
-function stateIs(cookie, state) {
-    return (cookie.state === state);
-}
-
-function setState(cookie, state) {
-    cookie.state = state;
-}
-
-function processClientStarted(cookie) {
-    if(cookie["user"] !== undefined) {
-	if(cookie.user["username"] !== undefined) {
-	    servicelog("User " + cookie.user.username + " logged out");
-	}
-    }
-    servicelog("Sending initial login view to client #" + cookie.count);
-    setState(cookie, "clientStarted");
-    cookie.aesKey = "";
-    cookie.user = {};
-    cookie.challenge = "";
-    var sendable = { type: "loginView" }
-    sendPlainTextToClient(cookie, sendable);
-    setStatustoClient(cookie, "Login");
-}
-
-function processUserLogin(cookie, content) {
-    var sendable;
-    if(!content.username) {
-	servicelog("Illegal user login message");
-	processClientStarted(cookie);
-	return;
-    } else {
-	var user = getUserByHashedName(content.username);
-	if(user.length === 0) {
-	    servicelog("Unknown user login attempt");
-	    processClientStarted(cookie);
-	    return;
-	} else {
-	    cookie.user = user[0];
-	    cookie.aesKey = user[0].password;
-	    servicelog("User " + user[0].username + " logging in");
-	    var plainChallenge = getNewChallenge();
-	    servicelog("plainChallenge:   " + plainChallenge);
-	    cookie.challenge = JSON.stringify(plainChallenge);
-	    sendable = { type: "loginChallenge",
-			 content: plainChallenge };
-	    sendCipherTextToClient(cookie, sendable);
-	}
-    }
-}
-
 function processLoginResponse(cookie, content) {
     var sendable;
-    var plainResponse = Aes.Ctr.decrypt(content, cookie.user.password, 128);
+    var plainResponse = userauth.decrypt(content, cookie);
     if(cookie.challenge === plainResponse) {
 	servicelog("User login OK");
-	setState(cookie, "loggedIn");
-	setStatustoClient(cookie, "Login OK");
+	userauth.setState(cookie, "loggedIn");
+	userauth.setStatustoClient(cookie, "Login OK");
         sendable = { type: "calendarData",
 		     content: createUserCalendarSendable(cookie.user.username) };
-	sendCipherTextToClient(cookie, sendable);
+	userauth.sendCipherTextToClient(cookie, sendable);
 	if(isUserAdministrator(cookie.user)) {
 	    sendable = { type: "enableAdminButton", content:"none" };
-	    sendCipherTextToClient(cookie, sendable);
+	    userauth.sendCipherTextToClient(cookie, sendable);
 	}
     } else {
 	servicelog("User login failed");
@@ -198,110 +126,8 @@ function processLoginResponse(cookie, content) {
     }
 }
 
-function processCreateAccount(cookie, content) {
-    var sendable;
-    servicelog("temp passwd: " + JSON.stringify(cookie.aesKey));
-    var account = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
-
-    if(typeof(account) !== "object") {
-	servicelog("Received illegal account creation data");
-	return false;
-    }
-    if(account["username"] === undefined) {
-	servicelog("Received account creation data without username");
-	return false;
-    }
-
-    if(stateIs(cookie, "newUserValidated")) {
-	servicelog("Request for new user: [" + account.username + "]");
-	if(!createAccount(account)) {
-	    servicelog("Cannot create account " + account.username);
-	    // there are more possible reasons than already existing account, however user needs
-	    // not know about that, hence display only "Account already exists!" in client...
-	    setStatustoClient(cookie, "Account already exists!");
-	    sendable = { type: "createNewAccount" };
-	    sendPlainTextToClient(cookie, sendable);
-	    return;
-	} else {
-	    processClientStarted(cookie);
-	    setStatustoClient(cookie, "Account created!");
-	    var emailSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_CONFIRM_SUBJECT");
-	    var emailAdminSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_CONFIRM_ADMIN_SUBJECT");
-	    var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-							   "NEW_ACCOUNT_CONFIRM_GREETING"),
-					   account.username,
-					   mainConfig.main.siteFullUrl);
-	    var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-								"NEW_ACCOUNT_CONFIRM_ADMIN_GREETING"),
-						account.username);
-	    sendEmail(cookie, emailSubject, emailBody, account.email, "account creation");
-	    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "account creation");
-	    return;
-	}
-    }
-    if(stateIs(cookie, "oldUserValidated")) {
-	servicelog("Request account change for user: [" + account.username + "]");
-	var user = getUserByUserName(account.username);
-	if(user.length === 0) {
-	    processClientStarted(cookie);
-	    setStatustoClient(cookie, "Illegal user operation!");
-	    return;
-	} else {
-	    if(updateUserAccount(cookie, account)) {
-		setStatustoClient(cookie, "Account updated!");
-	    } else {
-		setStatustoClient(cookie, "Account update failed!");
-	    }
-	    processClientStarted(cookie);
-	    return;
-	}
-    }
-}
-
-function processConfirmEmail(cookie, content) {
-    servicelog("Request for email verification: [" + content + "]");
-    sendVerificationEmail(cookie, content);
-    processClientStarted(cookie);
-    setStatustoClient(cookie, "Email sent!");
-}
-
-function processValidateAccount(cookie, content) {
-    if(!content.email || !content.challenge) {
-	servicelog("Illegal validate account message");
-	processClientStarted(cookie);
-	return;
-    } else {
-	servicelog("Validation code: " + JSON.stringify(content));
-	account = validateAccountCode(content.email.toString());
-	if((account !== false) && (Aes.Ctr.decrypt(content.challenge, account.token.key, 128)
-				   === "clientValidating")) {
-	    setState(cookie, "newUserValidated");
-	    setStatustoClient(cookie, "Validation code correct!");
-	    cookie.aesKey = account.token.key;
-	    var newAccount = {email: account.email};
-	    newAccount.buttonText = "Create Account!";
-	    var user = getUserByEmail(account.email);
-	    if(user.length !== 0) {
-		newAccount.username = user[0].username;
-		newAccount.realname = user[0].realname;
-		newAccount.phone = user[0].phone;
-		newAccount.buttonText = "Save Account!"
-		setState(cookie, "oldUserValidated");
-	    }
-	    sendable = { type: "createNewAccount",
-			 content: newAccount };
-	    sendCipherTextToClient(cookie, sendable);
-	    return;
-	} else {
-	    processClientStarted(cookie);
-	    setStatustoClient(cookie, "Validation code failed!");
-	    return;
-	}
-    }
-}
-
 function processSendReservation(cookie, content) {
-    var reservation = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
+    var reservation = JSON.parse(userauth.decrypt(content, cookie));
     servicelog("received reservation: " + JSON.stringify(reservation));
     var reservationData = datastorage.read("reservations");
     var newReservations = reservationData.reservations.filter(function(r) {
@@ -317,17 +143,17 @@ function processSendReservation(cookie, content) {
     } else {
 	servicelog("Updated reservation database: " + JSON.stringify(reservationData));
     }
-    setStatustoClient(cookie, "Reservation sent");
+    userauth.setStatustoClient(cookie, "Reservation sent");
     sendable = { type: "calendarData",
 		 content: createUserCalendarSendable(cookie.user.username) };
-    sendCipherTextToClient(cookie, sendable);
+    userauth.sendCipherTextToClient(cookie, sendable);
     var reservationTotals = calculateReservationTotals(reservation);
     sendReservationEmail(cookie, reservationTotals);
 }
 
 function applyAdminReservationChange(cookie, userData) {
     var reservationData = datastorage.read("reservations");
-    var account = getUserByUserName(userData.user)[0];
+    var account = userauth.getUserByUserName(userData.user)[0];
     if(account.length === 0) {
 	servicelog("Illegal username in reservation state change");
 	return false;
@@ -335,10 +161,10 @@ function applyAdminReservationChange(cookie, userData) {
 
     // add pending and reserved entries to database
 
-    setStatustoClient(cookie, "Reservation state changed");
+    userauth.setStatustoClient(cookie, "Reservation state changed");
     var sendable = { type: "adminView",
 		     content: createAdminCalendarSendable() };
-    sendCipherTextToClient(cookie, sendable);
+    userauth.sendCipherTextToClient(cookie, sendable);
 
     var dayList = "";
     if(userData.reserved.length !==0) {
@@ -348,32 +174,32 @@ function applyAdminReservationChange(cookie, userData) {
 	dayList += "     PENDING:  " + JSON.stringify(userData.pending);
     }
 
-    var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_SUBJECT");
-    var emailAdminSubject = getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_ADMIN_SUBJECT");
-    var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+    var emailSubject = userauth.getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_SUBJECT");
+    var emailAdminSubject = userauth.getLanguageText(mainConfig.main.language, "RESERVATION_STATE_CHANGE_ADMIN_SUBJECT");
+    var emailBody = userauth.fillTagsInText(userauth.getLanguageText(mainConfig.main.language,
 						   "RESERVATION_STATE_CHANGE_GREETING"),
 				   account.username,
 				   dayList);
-    var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+    var emailAdminBody = userauth.fillTagsInText(userauth.getLanguageText(mainConfig.main.language,
 							"RESERVATION_STATE_CHANGE_ADMIN_GREETING"),
 					account.username);
-    sendEmail(cookie, emailSubject, emailBody, account.email, "reservation admin");
-    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "reservation admin");
+    userauth.sendEmail(cookie, emailSubject, emailBody, account.email, "reservation admin");
+    userauth.sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "reservation admin");
 }
 
 function processSendAdminView(cookie, content) {
     if(!isUserAdministrator(cookie.user)) {
 	servicelog("User " + cookie.user.username + " is not an administrator");
 	processClientStarted(cookie);
-	setStatustoClient(cookie, "Admin validation failed!");
+	userauth.setStatustoClient(cookie, "Admin validation failed!");
 	return;
     } else {
 	servicelog("User " + cookie.user.username + " entering administrator mode");
-	setStatustoClient(cookie, "Admin validation OK!");
+	userauth.setStatustoClient(cookie, "Admin validation OK!");
 	var reservationData = datastorage.read("reservations");
 	var sendable = { type: "adminView",
 			 content: createAdminCalendarSendable() };
-	sendCipherTextToClient(cookie, sendable);
+	userauth.sendCipherTextToClient(cookie, sendable);
     }
 }
 
@@ -381,10 +207,10 @@ function processAdminChange(cookie, content) {
     if(!isUserAdministrator(cookie.user)) {
 	servicelog("User " + cookie.user.username + " is not an administrator");
 	processClientStarted(cookie);
-	setStatustoClient(cookie, "Admin validation failed!");
+	userauth.setStatustoClient(cookie, "Admin validation failed!");
 	return;
     } else {
-	var adminChange = JSON.parse(Aes.Ctr.decrypt(content, cookie.aesKey, 128));
+	var adminChange = JSON.parse(userauth.decrypt(content, cookie));
 	servicelog("Administrative change by " + cookie.user.username + ": " +
 		   JSON.stringify(adminChange));
 	adminChange.change.forEach(function(userData) {
@@ -396,15 +222,15 @@ function processAdminChange(cookie, content) {
 function processSendUserView(cookie, content) {
     var sendable = { type: "calendarData",
 		     content: createUserCalendarSendable(cookie.user.username) };
-    sendCipherTextToClient(cookie, sendable);
+    userauth.sendCipherTextToClient(cookie, sendable);
     sendable = { type: "enableAdminButton", content:"none" };
-    sendCipherTextToClient(cookie, sendable);
+    userauth.sendCipherTextToClient(cookie, sendable);
     servicelog("User " + cookie.user.username + " exiting administrator mode");
-    setStatustoClient(cookie, "User validation OK!");
+    userauth.setStatustoClient(cookie, "User validation OK!");
 }
 
 function isUserAdministrator(user) {
-    return user.priviliges === "administrator";
+    return user.applicationData.priviliges === "admin";
 }
 
 function getDayType(day) {
@@ -437,237 +263,33 @@ function calculateReservationTotals(reservation) {
 	" euros, including discount of " + discount + " euros.";
 }
 
-function readUserData() {
-    userData = datastorage.read("users");
-    if(userData === false) {
-	servicelog("User database read failed");
-    } 
-    return userData;
-}
-
-function updateUserAccount(cookie, account) {
-    var userData = readUserData();
-    var oldUserAccount = getUserByUserName(account.username);
-    if(oldUserAccount.length === 0) {
-	return false;
-    } else {
-	var newUserData = { users : [] };
-	newUserData.users = userData.users.filter(function(u) {
-	    return u.username !== account.username;
-	});
-	var newUserAccount = { username: account.username,
-			       hash: sha1.hash(account.username),
-			       password: account.password,
-			       priviliges: oldUserAccount[0].priviliges };
-	if(account["realname"] !== undefined) { newUserAccount.realname = account.realname; }
-	if(account["email"] !== undefined) { newUserAccount.email = account.email; }
-	if(account["phone"] !== undefined) { newUserAccount.phone = account.phone; }
-	newUserData.users.push(newUserAccount);
-	if(datastorage.write("users", newUserData) === false) {
-	    servicelog("User database write failed");
-	} else {
-	    servicelog("Updated User Account: " + JSON.stringify(newUserAccount));
-	}
-	var emailSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_CONFIRM_SUBJECT");
-	var emailAdminSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_CONFIRM_ADMIN_SUBJECT");
-	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-						       "PASSWORD_RESET_CONFIRM_GREETING"),
-				       account.username,
-				       mainConfig.main.siteFullUrl);
-	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-							    "PASSWORD_RESET_CONFIRM_ADMIN_GREETING"),
-					    account.username);
-	sendEmail(cookie, emailSubject, emailBody, account.email, "account update");
-	sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "account update");
-	return true;
-    }
-}
-
-function getUserByUserName(username) {
-    return readUserData().users.filter(function(u) {
-	return u.username === username;
-    });
-}
-
-function getUserByEmail(email) {
-    return readUserData().users.filter(function(u) {
-	return u.email === email;
-    });
-}
-
-function getUserByHashedName(hash) {
-    return readUserData().users.filter(function(u) {
-	return u.hash === hash;
-    });
-}
-
-function createAccount(account) {
-    if(account["password"] === undefined) {
-	servicelog("Received account creation data without password");
-	return false;
-    }
-    var userData = readUserData();
-    if(userData.users.filter(function(u) {
-	return u.username === account.username;
-    }).length !== 0) {
-	servicelog("Cannot create an existing user account");
-	return false;
-    } else {
-	var newAccount = { username: account.username,
-			   hash: sha1.hash(account.username),
-			   password: account.password,
-			   priviliges:"user" };
-	if(account["realname"] !== undefined) { newAccount.realname = account.realname; }
-	if(account["email"] !== undefined) { newAccount.email = account.email; }
-	if(account["phone"] !== undefined) { newAccount.phone = account.phone; }
-	userData.users.push(newAccount);
-	if(datastorage.write("users", userData) === false) {
-	    servicelog("User database write failed");
-	    return false;
-	} else {
-	    return true;
-	}
-    }
-}
-
-function validateAccountCode(code) {
-    var userData = datastorage.read("pending");
-    if(Object.keys(userData.pending).length === 0) {
-	servicelog("Empty pending requests database, bailing out");
-	return false;
-    }
-    var target = userData.pending.filter(function(u) {
-	return u.token.mail === code.slice(0, 8);
-    });
-    if(target.length === 0) {
-	return false;
-    } else {
-	var newUserData = { pending : [] };
-	newUserData.pending = userData.pending.filter(function(u) {
-	    return u.token.mail !== code.slice(0, 8);
-	});
-
-	if(datastorage.write("pending", newUserData) === false) {
-	    servicelog("Pending requests database write failed");
-	} else {
-	    servicelog("Removed pending request from database");
-	}
-	return target[0];
-    }
-}
-
-function removePendingRequest(cookie, emailAdress) {
-    var userData = datastorage.read("pending");
-    if(Object.keys(userData.pending).length === 0) {
-	servicelog("Empty pending requests database, bailing out");
-	return;
-    }
-    if(userData.pending.filter(function(u) {
-	return u.email === emailAdress;
-    }).length !== 0) {
-	servicelog("Removing duplicate entry from pending database");
-	var newUserData = { pending : [] };
-	newUserData.pending = userData.pending.filter(function(u) {
-	    return u.email !== emailAdress;
-	});
-	if(datastorage.write("pending", newUserData) === false) {
-	    servicelog("Pending requests database write failed");
-	}
-    } else {
-	servicelog("no duplicate entries in pending database");
-    }
-}
-
-function sendVerificationEmail(cookie, recipientAddress) {
-    removePendingRequest(cookie, recipientAddress);
-    var pendingData = datastorage.read("pending");
-    var emailData = datastorage.read("email");
-    var timeout = new Date();
-    var emailToken = generateEmailToken(recipientAddress);
-    timeout.setHours(timeout.getHours() + 24);
-    var request = { email: recipientAddress,
-		    token: emailToken,
-		    date: timeout.getTime() };
-    pendingData.pending.push(request);
-    if(datastorage.write("pending", pendingData) === false) {
-	servicelog("Pending database write failed");
-    }
-    if(getUserByEmail(recipientAddress).length === 0) {
-	var emailSubject = getLanguageText(mainConfig.main.language, "NEW_ACCOUNT_REQUEST_SUBJECT");
-	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-						       "NEW_ACCOUNT_REQUEST_GREETING"),
-				       (request.token.mail + request.token.key));
-    } else {
-	var emailSubject = getLanguageText(mainConfig.main.language, "PASSWORD_RESET_SUBJECT");
-	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
-						       "PASSWORD_RESET_GREETING"),
-				       getUserByEmail(recipientAddress)[0].username,
-				       (request.token.mail + request.token.key));
-    }
-    sendEmail(cookie, emailSubject, emailBody, recipientAddress, "account verification");
-}
-
-
 function sendReservationEmail(cookie, reservationTotals) {
     var recipientAddress = cookie.user.email;
     var emailData = datastorage.read("email");
     if(reservationTotals === false) {
-	var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_SUBJECT");
-	var emailAdminSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_ADMIN_SUBJECT");
-	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+	var emailSubject = userauth.getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_SUBJECT");
+	var emailAdminSubject = userauth.getLanguageText(mainConfig.main.language, "RESERVATION_CANCEL_ADMIN_SUBJECT");
+	var emailBody = userauth.fillTagsInText(userauth.getLanguageText(mainConfig.main.language,
 						       "RESERVATION_CANCEL_GREETING"),
-				       getUserByEmail(recipientAddress)[0].username);
-	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+				       userauth.getUserByEmail(recipientAddress)[0].username);
+	var emailAdminBody = userauth.fillTagsInText(userauth.getLanguageText(mainConfig.main.language,
 						       "RESERVATION_CANCEL_ADMIN_GREETING"),
-				       getUserByEmail(recipientAddress)[0].username);
+				       userauth.getUserByEmail(recipientAddress)[0].username);
     } else {
-	var emailSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CONFIRM_SUBJECT");
-	var emailAdminSubject = getLanguageText(mainConfig.main.language, "RESERVATION_CONFIRM_ADMIN_SUBJECT");
-	var emailBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+	var emailSubject = userauth.getLanguageText(mainConfig.main.language, "RESERVATION_CONFIRM_SUBJECT");
+	var emailAdminSubject = userauth.getLanguageText(mainConfig.main.language, "RESERVATION_CONFIRM_ADMIN_SUBJECT");
+	var emailBody = userauth.fillTagsInText(userauth.getLanguageText(mainConfig.main.language,
 						       "RESERVATION_CONFIRM_GREETING"),
-				       getUserByEmail(recipientAddress)[0].username,
+				       userauth.getUserByEmail(recipientAddress)[0].username,
 				       reservationTotals);
-	var emailAdminBody = fillTagsInText(getLanguageText(mainConfig.main.language,
+	var emailAdminBody = userauth.fillTagsInText(userauth.getLanguageText(mainConfig.main.language,
 							    "RESERVATION_CONFIRM_ADMIN_GREETING"),
-					    getUserByEmail(recipientAddress)[0].username);
+					    userauth.getUserByEmail(recipientAddress)[0].username);
     }
-    sendEmail(cookie, emailSubject, emailBody, recipientAddress, "reservation update");
-    sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "reservation update");
+    userauth.sendEmail(cookie, emailSubject, emailBody, recipientAddress, "reservation update");
+    userauth.sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "reservation update");
 }
 
-function sendEmail(cookie, emailSubject, emailBody, recipientAddress, logline) {
-    var emailData = datastorage.read("email");
-    if(emailData.blindlyTrust) {
-	servicelog("Trusting self-signed certificates");
-	process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    }
-    email.server.connect({
-	user: emailData.user,
-	password: emailData.password,
-	host: emailData.host,
-	ssl: emailData.ssl
-    }).send({ text: emailBody,
-	      from: emailData.sender,
-	      to: recipientAddress,
-	      subject: emailSubject }, function(err, message) {
-		  if(err) {
-		      servicelog(err + " : " + JSON.stringify(message));
-		      setStatustoClient(cookie, "Failed sending email!");
-		  } else {
-		      servicelog("Sent " + logline + " email to " + recipientAddress);
-		      setStatustoClient(cookie, "Sent email");
-		  }
-	      });
-}
-
-function generateEmailToken(email) {
-    return { mail: sha1.hash(email).slice(0, 8),
-	     key: sha1.hash(globalSalt + JSON.stringify(new Date().getTime())).slice(0, 16) };
-}
-
-function getNewChallenge() {
-    return ("challenge_" + sha1.hash(globalSalt + new Date().getTime().toString()) + "1");
-}
 
 function createAdminCalendarSendable() {
     return createCalendarSendable(null, 1);
@@ -740,58 +362,13 @@ function getAllReservationsForDay(day) {
     return reservation;
 }
 
-function getLanguageText(language, tag) {
-    var langData = datastorage.read("language");
-    var langIndex = langData.language.indexOf(language);
-    if(++langIndex === 0) { return false; }
-    if(langData.substitution.filter(function(f) { return f.tag === tag }).length === 0) { return false; }
-    return langData.substitution.filter(function(f) { return f.tag === tag })[0]["LANG" + langIndex];
-}
 
-function fillTagsInText(text) {
-    for(var i = 1; i < arguments.length; i++) {
-	var substituteString = "_SUBSTITUTE_TEXT_" + i + "_";
-	text = text.replace(substituteString, arguments[i]);
-    }
-    return text;
-}
-
-setInterval(function() {
-    var now = new Date().getTime();
-    var userData = datastorage.read("pending");
-    if(Object.keys(userData.pending).length === 0) {
-	servicelog("No pending requests to purge");
-	return;
-    }
-    
-    var purgeCount = 0
-    var newUserData = { pending : [] };
-    userData.pending.forEach(function(r) {
-	if(r.date < now) {
-	    purgeCount++;
-	} else {
-	    newUserData.pending.push(r);
-	}
-    });
-
-    if(purgeCount === 0) {
-	servicelog("No pending requests timeouted");
-	return;
-    } else {
-	if(datastorage.write("pending", newUserData) === false) {
-	    servicelog("Pending requests database write failed");
-	} else {
-	    servicelog("Removed " + purgeCount + " timeouted pending requests");
-	}
-    }
-}, 1000*60*60);
 
 // datastorage.setLogger(servicelog);
 datastorage.initialize("main", { main : { port : 8080, language : "english",
 					  adminEmailAddess : "you <username@your-email.com>",
 					  siteFullUrl : "http://url.to.varauskalenteri/" } });
 datastorage.initialize("users", { users : [] }, true);
-datastorage.initialize("pending", { pending : [] }, true);
 datastorage.initialize("calendar", { year : "2016", season : [] });
 datastorage.initialize("reservations", { reservations : [] }, true);
 datastorage.initialize("rentables", { rentables : [] });
@@ -802,6 +379,9 @@ datastorage.initialize("email", { host : "smtp.your-email.com",
 				  sender : "you <username@your-email.com>",
 				  ssl : true,
 				  blindlyTrust : true });
+
+// userauth needs to access datastorage and servicelog;
+userauth.initialize(datastorage, servicelog);
 
 var mainConfig = datastorage.read("main");
 
