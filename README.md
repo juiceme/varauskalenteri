@@ -10,7 +10,7 @@ Data for the recipients and items are stored as JSON files. Web-interface enable
 ## Installation
 
 Varauskalenteri requires websocket and emailjs npm modules. You can install all depencencies by "npm install"
-The repository clones AES cryptography and datastorage libraries as submodules, You need to install them by "git submodule init; git submodule update"
+The repository clones AES cryptography and datastorage libraries as submodules, You need to install them by running the script ./checkout_submodules.sh
 
 ## Features
 
