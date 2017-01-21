@@ -234,14 +234,11 @@ function isUserAdministrator(user) {
 }
 
 function getDayType(day) {
-    var calendarData = datastorage.read("calendar");
-    var targetDay;
-    calendarData.season.forEach(function(w) {
-	w.days.forEach(function(d) {
-	    if (d.date === day) { targetDay = d; }
-	});
-    });
-    return targetDay;
+    var targetDay = new Date();
+    targetDay.setDate(day.split(".")[0]);
+    targetDay.setMonth(day.split(".")[1]-1);
+    targetDay.setYear(day.split(".")[2]);
+    return (targetDay.getDay() > 0 && targetDay.getDay() < 6) ? "weekday" : "weekend";
 }
 
 function calculateReservationTotals(reservation) {
@@ -249,9 +246,9 @@ function calculateReservationTotals(reservation) {
 	return false;
     }
     var weekDays = reservation.reservation
-	.filter(function(d) { return getDayType(d).type === "weekday"; }).length;
+	.filter(function(d) { return getDayType(d) === "weekday"; }).length;
     var weekendDays = reservation.reservation
-	.filter(function(d) { return getDayType(d).type === "weekend"; }).length;
+	.filter(function(d) { return getDayType(d) === "weekend"; }).length;
     var discount = 0;
     if(((weekDays + weekendDays) > 7) && (weekendDays > 1)) { discount = 100; }
     if(((weekDays + weekendDays) > 14) && (weekendDays > 3)) { discount = 200; }
@@ -290,7 +287,6 @@ function sendReservationEmail(cookie, reservationTotals) {
     userauth.sendEmail(cookie, emailAdminSubject, emailAdminBody, mainConfig.main.adminEmailAddess, "reservation update");
 }
 
-
 function createAdminCalendarSendable() {
     return createCalendarSendable(null, 1);
 }
@@ -301,29 +297,33 @@ function createUserCalendarSendable(user) {
 
 function createCalendarSendable(user, admin) {
     var calendarData = datastorage.read("calendar");
+    var currentDay = new Date(calendarData.startDay);
     var weeks = [];
-    calendarData.season.forEach(function(w) {
+    for(var w = calendarData.startWeek; w < (calendarData.endWeek + 1); w++) {
 	var days = [];
-	w.days.forEach(function(d) {
-	    if(admin === 1) { var items = getAllReservationsForDay(d); }
-	    else { var items = getReservationsForDay(d, user); }
-	    days.push({ date: d.date,
-			type: d.type,
+	for( var d = 1; d < 8; d++) {
+	    dayDate = currentDay.getDate() + "." + (currentDay.getMonth() + 1);
+	    if(admin === 1) { var items = getAllReservationsForDay(dayDate + "." + calendarData.year); }
+	    else { var items = getReservationsForDay(dayDate + "." + calendarData.year, user); }
+	    days.push({ date: dayDate,
+			type: (currentDay.getDay() > 0 && currentDay.getDay() < 6) ? "weekday" : "weekend",
 			items: items });
-	});
-	weeks.push({ week: w.week, days: days });
-    });
+	    currentDay.setDate(currentDay.getDate()+1);
+	}
+	weeks.push({ week: w, days: days });
+    }
 
     return { year: calendarData.year, season: weeks };
 }
 
-function getReservationsForDay(day, user) {
+
+function getReservationsForDay(date, user) {
     var itemData = datastorage.read("rentables");
     var reservationData = datastorage.read("reservations");
     var reservation = [];
     reservationData.reservations.forEach(function(r) {
 	if(r.reservation.filter(function(f) {
-	    return f === day.date
+	    return f === date
 	}).length !== 0 ) {
 	    if(r.user === user) {
 		reservation.push({user: r.user, state: r.state});
@@ -349,12 +349,12 @@ function getReservationsForDay(day, user) {
     return { state: "both_reserved" };
 }
 
-function getAllReservationsForDay(day) {
+function getAllReservationsForDay(date) {
     var reservationData = datastorage.read("reservations");
     var reservation = [];
     reservationData.reservations.forEach(function(r) {
 	if(r.reservation.filter(function(f) {
-	    return f === day.date
+	    return f === date
 	}).length !== 0 ) {
 	    reservation.push({user: r.user, state: r.state});
 	}
@@ -369,7 +369,7 @@ datastorage.initialize("main", { main : { port : 8080, language : "english",
 					  adminEmailAddess : "you <username@your-email.com>",
 					  siteFullUrl : "http://url.to.varauskalenteri/" } });
 datastorage.initialize("users", { users : [] }, true);
-datastorage.initialize("calendar", { year : "2016", season : [] });
+datastorage.initialize("calendar", { year : "2016", startDay: "5/2/2016", startWeek: 18, endWeek: 35 });
 datastorage.initialize("reservations", { reservations : [] }, true);
 datastorage.initialize("rentables", { rentables : [] });
 datastorage.initialize("language", { language : [ "finnish" , "english" ], substitution : [] });

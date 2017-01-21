@@ -61,7 +61,7 @@ function createCalendarView(calendarData, admin) {
     tableBody.id = "myCalendar";
 
     clearText.season.forEach(function(week) {
-	var row = createWeek(week, admin);
+	var row = createWeek(clearText.year, week, admin);
 	tableBody.appendChild(row);
     });
 
@@ -104,24 +104,24 @@ function createHeader(year) {
     return row;
 }
 
-function createWeek(week, admin) {
+function createWeek(year, week, admin) {
     var row = document.createElement('tr');
     var cell = document.createElement('td');
     cell.innerHTML = "<b>week " + week.week + "</b>";
     row.appendChild(cell);
     week.days.forEach(function(day) {
-	var cell = createDay(day, admin);
+	var cell = createDay(year, day, admin);
 	row.appendChild(cell);
     });
     return row;
 }
 
-function createDay(day, admin) {
+function createDay(year, day, admin) {
     var cell = document.createElement('td');
     cell.width="12%"
     cell.innerHTML = day.date + "<br><br>"
     cell.daytype = day.type;
-    cell.id = day.date;
+    cell.id = day.date + "." + year;
 
     if (admin === 1) {
 	cell.adminState = 0;
