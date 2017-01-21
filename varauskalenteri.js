@@ -152,7 +152,6 @@ function processSendReservation(cookie, content) {
 }
 
 function applyAdminReservationChange(cookie, userData) {
-    var reservationData = datastorage.read("reservations");
     var account = userauth.getUserByUserName(userData.user)[0];
     if(account.length === 0) {
 	servicelog("Illegal username in reservation state change");
@@ -196,7 +195,6 @@ function processSendAdminView(cookie, content) {
     } else {
 	servicelog("User " + cookie.user.username + " entering administrator mode");
 	userauth.setStatustoClient(cookie, "Admin validation OK!");
-	var reservationData = datastorage.read("reservations");
 	var sendable = { type: "adminView",
 			 content: createAdminCalendarSendable() };
 	userauth.sendCipherTextToClient(cookie, sendable);
