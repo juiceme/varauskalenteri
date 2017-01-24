@@ -130,11 +130,15 @@ function processSendReservation(cookie, content) {
     var reservation = JSON.parse(userauth.decrypt(content, cookie));
     servicelog("received reservation: " + JSON.stringify(reservation));
     var reservationData = datastorage.read("reservations");
+    var currentYear = datastorage.read("calendar").year;
     var newReservations = reservationData.reservations.filter(function(r) {
-	return ((r.user !== cookie.user.username) || (r.state === "reserved"));
+	return ((r.user !== cookie.user.username) ||
+		(r.state === "reserved") ||
+		(r.season !== currentYear));
     });
     if(reservation.reservation.length !== 0) {
 	newReservations.push({ user: cookie.user.username,
+			       season: currentYear,
 			       reservation: reservation.reservation,
 			       state: "pending" });
     }
