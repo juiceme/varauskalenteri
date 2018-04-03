@@ -1,6 +1,3 @@
-[submodule "datastorage"]
-	path = datastorage
-	url = https://github.com/juiceme/datastorage.git
-[submodule "userauth"]
-	path = userauth
-	url = https://github.com/juiceme/userauth.git
+[submodule "framework"]
+	path = framework
+	url = https://github.com/juiceme/framework.git

@@ -4,7 +4,7 @@
   "keywords": [
     "reservation calendar"
   ],
-  "version": "0.0.1",
+  "version": "0.0.2",
   "homepage": "http://www.swagman.org/",
   "author": {
     "name": "Jussi Ohenoja",
@@ -22,10 +22,9 @@
   "devDependencies": {
   },
   "dependencies": {
-    "websocket": "=1.0.22",
-    "emailjs": "=1.0.2"
   },
   "scripts": {
+    "install": "git submodule init; git submodule update ; cd framework ; npm install ; cd .."
   },
   "engine": [
     "node >= v0.10.0"
