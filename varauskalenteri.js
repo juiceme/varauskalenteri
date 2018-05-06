@@ -25,10 +25,8 @@ function handleApplicationMessage(cookie, decryptedMessage) {
 // Administration UI panel requires application to provide needed priviliges
 
 function createAdminPanelUserPriviliges() {
-    // at least a "view" privilige is nice-to-have, add others as you need them.
-    return [ { privilige: "view", code: "v" },
-	     { privilige: "edit", code: "ed" },
-	     { privilige: "edit-seasons", code: "se" },
+    return [ { privilige: "edit-reservations", code: "er" },
+	     { privilige: "edit-seasons", code: "es" },
 	     { privilige: "approve", code: "ap" } ];
 }
 
@@ -57,7 +55,7 @@ function processResetToMainState(cookie, content) {
 
 
 function sendMainUiPanel(cookie) {
-    if(!framework.userHasPrivilige("view", cookie.user)) {
+    if(!framework.userHasPrivilige("edit-reservations", cookie.user)) {
 	var sendable = { type: "createUiPage",
 			 content: { topButtonList: framework.createTopButtons(cookie), frameList: [], buttonList: [] } };
 	framework.sendCipherTextToClient(cookie, sendable);
@@ -84,8 +82,8 @@ function sendCalendarView(cookie, currentSeason) {
     var topButtonList = framework.createTopButtons(cookie);
     var seasons = datastorage.read("seasons").seasons;
 
-    // if no seasons created or no privilige to view, just display the top buttons
-    if((seasons.length === 0) || (!framework.userHasPrivilige("view", cookie.user))) {
+    // if no seasons created or no privilige to use, just display the top buttons
+    if((seasons.length === 0) || (!framework.userHasPrivilige("edit-reservations", cookie.user))) {
 	var sendable = { type: "createUiPage",
 			 content: { topButtonList: topButtonList, frameList: [], buttonList: [] } };
 	framework.sendCipherTextToClient(cookie, sendable);
