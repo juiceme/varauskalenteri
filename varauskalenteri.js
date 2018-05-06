@@ -31,6 +31,13 @@ function createAdminPanelUserPriviliges() {
 }
 
 
+// When a new user is self-created, define if some priviliges are pre-created
+
+function createDefaultPriviliges() {
+    return [ "edit-reservations" ];
+}
+
+
 // Define the top button panel, always visible.
 // The panel automatically contains "Logout" and "Admin Mode" buttons so no need to include those.
 
@@ -143,10 +150,16 @@ function sendCalendarView(cookie, currentSeason) {
     }
 
     var mainPanel = { title: "Calendar for " + season.year,
-                     frameId: 0,
-                     header: [ { text: "Week" }, { text: weekDays[0] }, { text: weekDays[1] }, { text: weekDays[2] },
-			       { text: weekDays[3] }, { text: weekDays[4] }, { text: weekDays[5] }, { text: weekDays[6] } ],
-                     items: items };
+                      frameId: 0,
+		      header: [ [ [ framework.createUiTextNode("week", "Week") ],
+				  [ framework.createUiTextNode("day1", weekDays[0]) ],
+				  [ framework.createUiTextNode("day2", weekDays[1]) ],
+				  [ framework.createUiTextNode("day3", weekDays[2]) ],
+				  [ framework.createUiTextNode("day4", weekDays[3]) ],
+				  [ framework.createUiTextNode("day5", weekDays[4]) ],
+				  [ framework.createUiTextNode("day6", weekDays[5]) ],
+				  [ framework.createUiTextNode("day7", weekDays[6]) ] ] ],
+                      items: items };
 
     var frameList = [ { frameType: "fixedListFrame", frame: mainPanel } ];
     var sendable = { type: "createUiPage",
@@ -291,8 +304,12 @@ function processGetSeasonsForEdit(cookie, content) {
 
 	var itemList = { title: "Seasons",
 			 frameId: 0,
-			 header: [ { text: "Name" }, { text: "start date" }, { text: "end date" },
-				   { text: "Locked" },  { text: "Edit" }],
+			 header: [ [ [ framework.createUiTextNode("", "") ],
+				     [ framework.createUiTextNode("name", "Name") ],
+				     [ framework.createUiTextNode("startweek", "Start week") ],
+				     [ framework.createUiTextNode("endweek", "End week") ],
+				     [ framework.createUiTextNode("locked", "Locked") ],
+				     [ framework.createUiTextNode("edit", "Edit") ] ] ],
 			 items: items,
 			 newItem: [ [ framework.createUiTextArea("year", "<year>", 20) ],
 				    [ framework.createUiTextArea("startweek", "<startweek>", 20) ],
@@ -396,6 +413,7 @@ framework.setCallback("datastorageInitialize", datastorage.initialize);
 framework.setCallback("handleApplicationMessage", handleApplicationMessage);
 framework.setCallback("processResetToMainState", processResetToMainState);
 framework.setCallback("createAdminPanelUserPriviliges", createAdminPanelUserPriviliges);
+framework.setCallback("createDefaultPriviliges", createDefaultPriviliges);
 framework.setCallback("createTopButtonList", createTopButtonList);
 
 
